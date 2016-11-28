@@ -1,0 +1,2996 @@
+diff --git a/ctags/parsers/sh.c b/ctags/parsers/sh.c
+index fd371a5..6252e78 100644
+--- a/ctags/parsers/sh.c
++++ b/ctags/parsers/sh.c
+@@ -55,44 +55,118 @@ static void findShTags (void)
+ 
+ 	while ((line = readLineFromInputFile ()) != NULL)
+ 	{
+-		const unsigned char* cp = line;
+-		bool functionFound = false;
++		const unsigned char *cp = line;
+ 
+-		if (line [0] == '#')
++		while (isspace ((int) *cp))
++			++cp;
++
++		if (*cp == '#')
+ 			continue;
+ 
+-		while (isspace (*cp))
+-			cp++;
+-		if (strncmp ((const char*) cp, "function", (size_t) 8) == 0  &&
+-			isspace ((int) cp [8]))
++		bool functionFound;
++		bool allAreDigits = true;
++
++		if (strncmp ((const char *) cp, "function", (size_t) 8) == 0  && isspace ((int) cp [8]))
+ 		{
+-			functionFound = true;
+-			cp += 8;
+-			if (! isspace ((int) *cp))
+-				continue;
++			cp += 9;
++
+ 			while (isspace ((int) *cp))
+ 				++cp;
++
++			if (*cp == '\0')
++				continue;
++
++			functionFound = true;
++			const unsigned char *start = cp;
++
++			do
++			{
++				switch (*cp)
++				{
++				case '"':
++				case '$':
++				case '&':
++				case '\'':
++				case ')':
++				case ';':
++				case '<':
++				case '=':
++				case '>':
++				case '`':
++					functionFound = false;
++					break;
++				default:
++					if (allAreDigits && ! isdigit ((int) *cp))
++						allAreDigits = false;
++
++					vStringPut (name, (int) *cp);
++					++cp;
++				}
++			}
++			while (functionFound && *cp != '\0' && ! isspace ((int) *cp) && *cp != '(');
++
++			if (cp == start)
++				continue;
++
++			if (functionFound)
++			{
++				if (allAreDigits)
++					functionFound = false;
++				else
++				{
++					while (isspace ((int) *cp))
++						++cp;
++
++					if (*cp == '(')
++					{
++						while (isspace ((int) *++cp))
++							;
++
++						if (*cp != ')')
++							functionFound = false;
++					}
++				}
++			}
+ 		}
+-		if (! (isalnum ((int) *cp) || *cp == '_'))
+-			continue;
+-		while (isalnum ((int) *cp)  ||  *cp == '_')
+-		{
+-			vStringPut (name, (int) *cp);
+-			++cp;
+-		}
+-		while (isspace ((int) *cp))
+-			++cp;
+-		if (*cp++ == '(')
++		else
+ 		{
+-			while (isspace ((int) *cp))
++			if (! (isalnum ((int) *cp) || *cp == '_'))
++				continue;
++
++			do
++			{
++				if (! isdigit ((int) *cp))
++					allAreDigits = false;
++
++				vStringPut (name, (int) *cp);
+ 				++cp;
+-			if (*cp == ')'  && ! hackReject (name))
+-				functionFound = true;
++			}
++			while (isalnum ((int) *cp) || *cp == '_');
++
++			functionFound = false;
++
++			if (! allAreDigits)
++			{
++				while (isspace ((int) *cp))
++					++cp;
++
++				if (*cp == '(')
++				{
++					while (isspace ((int) *++cp))
++						;
++
++					if (*cp == ')')
++						functionFound = true;
++				}
++			}
+ 		}
+-		if (functionFound)
++
++		if (functionFound && ! hackReject (name))
+ 			makeSimpleTag (name, ShKinds, K_FUNCTION);
++
+ 		vStringClear (name);
+ 	}
++
+ 	vStringDelete (name);
+ }
+ 
+diff --git a/data/geany.glade b/data/geany.glade
+index 29b7192..3acbcef 100644
+--- a/data/geany.glade
++++ b/data/geany.glade
+@@ -104,6 +104,12 @@
+     <property name="stock">gtk-open</property>
+     <property name="icon-size">1</property>
+   </object>
++  <object class="GtkImage" id="image_open_files_recursively1">
++    <property name="visible">True</property>
++    <property name="can_focus">False</property>
++    <property name="stock">gtk-open</property>
++    <property name="icon-size">1</property>
++  </object>
+   <object class="GtkImage" id="image3192">
+     <property name="visible">True</property>
+     <property name="can_focus">False</property>
+@@ -548,6 +554,24 @@
+     <property name="stock">gtk-revert-to-saved</property>
+     <property name="icon-size">1</property>
+   </object>
++  <object class="GtkImage" id="image_reload_all1">
++    <property name="visible">True</property>
++    <property name="can_focus">False</property>
++    <property name="stock">gtk-revert-to-saved</property>
++    <property name="icon-size">1</property>
++  </object>
++  <object class="GtkImage" id="image_rename1">
++    <property name="visible">True</property>
++    <property name="can_focus">False</property>
++    <property name="stock">gtk-edit</property>
++    <property name="icon-size">1</property>
++  </object>
++  <object class="GtkImage" id="image_file_delete1">
++    <property name="visible">True</property>
++    <property name="can_focus">False</property>
++    <property name="stock">gtk-delete</property>
++    <property name="icon-size">1</property>
++  </object>
+   <object class="GtkImage" id="image4060">
+     <property name="visible">True</property>
+     <property name="can_focus">False</property>
+@@ -744,6 +768,49 @@
+       </row>
+     </data>
+   </object>
++  <object class="GtkListStore" id="notebook_auto_sort_mode_list">
++    <columns>
++      <!-- column-name item -->
++      <column type="gchararray"/>
++    </columns>
++    <data>
++      <row>
++        <col id="0" translatable="yes">Disabled</col>
++      </row>
++      <row>
++        <col id="0" translatable="yes">By filename</col>
++      </row>
++      <row>
++        <col id="0" translatable="yes">By pathname</col>
++      </row>
++      <row>
++        <col id="0" translatable="yes">By folder</col>
++      </row>
++    </data>
++  </object>
++  <object class="GtkListStore" id="default_new_file_dir_list">
++    <columns>
++      <!-- column-name item -->
++      <column type="gchararray"/>
++    </columns>
++    <data>
++      <row>
++        <col id="0" translatable="yes">None</col>
++      </row>
++      <row>
++        <col id="0" translatable="yes">Current Document's Directory</col>
++      </row>
++      <row>
++        <col id="0" translatable="yes">Project Directory</col>
++      </row>
++      <row>
++        <col id="0" translatable="yes">Home Directory</col>
++      </row>
++      <row>
++        <col id="0" translatable="yes">Current Document's Dir., Project Dir., or Home Dir.</col>
++      </row>
++    </data>
++  </object>
+   <object class="GtkDialog" id="prefs_dialog">
+     <property name="can_focus">False</property>
+     <property name="title" translatable="yes">Preferences</property>
+@@ -2184,6 +2251,49 @@
+                                     <property name="position">4</property>
+                                   </packing>
+                                 </child>
++                                <child>
++                                  <object class="GtkHBox" id="hbox_notebook_auto_sort_tabs">
++                                    <property name="visible">True</property>
++                                    <property name="can_focus">False</property>
++                                    <property name="spacing">12</property>
++                                    <child>
++                                      <object class="GtkLabel" id="label_notebook_auto_sort_tabs">
++                                        <property name="visible">True</property>
++                                        <property name="can_focus">False</property>
++                                        <property name="xalign">0</property>
++                                        <property name="label" translatable="yes">Automatically sort tabs:</property>
++                                      </object>
++                                      <packing>
++                                        <property name="position">0</property>
++                                        <property name="expand">False</property>
++                                        <property name="fill">False</property>
++                                      </packing>
++                                    </child>
++                                    <child>
++                                      <object class="GtkComboBox" id="combo_notebook_auto_sort_tabs">
++                                        <property name="visible">True</property>
++                                        <property name="can_focus">True</property>
++                                        <property name="model">notebook_auto_sort_mode_list</property>
++                                        <child>
++                                          <object class="GtkCellRendererText" id="cellrenderertext_notebook_auto_sort_tabs"/>
++                                          <attributes>
++                                            <attribute name="text">0</attribute>
++                                          </attributes>
++                                        </child>
++                                      </object>
++                                      <packing>
++                                        <property name="expand">False</property>
++                                        <property name="fill">False</property>
++                                        <property name="position">1</property>
++                                      </packing>
++                                    </child>
++                                  </object>
++                                  <packing>
++                                    <property name="expand">False</property>
++                                    <property name="fill">False</property>
++                                    <property name="position">5</property>
++                                  </packing>
++                                </child>
+                               </object>
+                             </child>
+                           </object>
+@@ -4253,6 +4363,7 @@
+                               <object class="GtkVBox" id="vbox38">
+                                 <property name="visible">True</property>
+                                 <property name="can_focus">False</property>
++                                <property name="spacing">3</property>
+                                 <child>
+                                   <object class="GtkCheckButton" id="check_cmdline_new_files">
+                                     <property name="label" translatable="yes">Open new documents from the command-line</property>
+@@ -4314,6 +4425,49 @@
+                                     <property name="position">1</property>
+                                   </packing>
+                                 </child>
++                                <child>
++                                  <object class="GtkHBox" id="hbox_default_new_file_dir">
++                                    <property name="visible">True</property>
++                                    <property name="can_focus">False</property>
++                                    <property name="spacing">12</property>
++                                    <child>
++                                      <object class="GtkLabel" id="label_default_new_file_dir">
++                                        <property name="visible">True</property>
++                                        <property name="can_focus">False</property>
++                                        <property name="xalign">0</property>
++                                        <property name="label" translatable="yes">Default Directory:</property>
++                                      </object>
++                                      <packing>
++                                        <property name="position">0</property>
++                                        <property name="expand">False</property>
++                                        <property name="fill">False</property>
++                                      </packing>
++                                    </child>
++                                    <child>
++                                      <object class="GtkComboBox" id="combo_default_new_file_dir">
++                                        <property name="visible">True</property>
++                                        <property name="can_focus">True</property>
++                                        <property name="model">default_new_file_dir_list</property>
++                                        <child>
++                                          <object class="GtkCellRendererText" id="cellrenderertext_default_new_file_dir"/>
++                                          <attributes>
++                                            <attribute name="text">0</attribute>
++                                          </attributes>
++                                        </child>
++                                      </object>
++                                      <packing>
++                                        <property name="expand">False</property>
++                                        <property name="fill">False</property>
++                                        <property name="position">1</property>
++                                      </packing>
++                                    </child>
++                                  </object>
++                                  <packing>
++                                    <property name="expand">False</property>
++                                    <property name="fill">False</property>
++                                    <property name="position">5</property>
++                                  </packing>
++                                </child>
+                               </object>
+                               <packing>
+                                 <property name="expand">False</property>
+@@ -6115,6 +6269,21 @@
+                                 <property name="position">7</property>
+                               </packing>
+                             </child>
++                            <child>
++                              <object class="GtkCheckButton" id="allow_bold">
++                                <property name="label" translatable="yes">Draw intense colors in bold fonts</property>
++                                <property name="visible">True</property>
++                                <property name="can_focus">True</property>
++                                <property name="receives_default">False</property>
++                                <property name="tooltip_text" translatable="yes">Whether to use bold fonts when printing characters having the high-intensity attribute</property>
++                                <property name="draw_indicator">True</property>
++                              </object>
++                              <packing>
++                                <property name="expand">False</property>
++                                <property name="fill">True</property>
++                                <property name="position">8</property>
++                              </packing>
++                            </child>
+                           </object>
+                           <packing>
+                             <property name="expand">False</property>
+@@ -6369,6 +6538,16 @@
+                           </object>
+                         </child>
+                         <child>
++                          <object class="GtkImageMenuItem" id="menu_open_files_recursively1">
++                            <property name="label" translatable="yes">Open Files Recursivel_y</property>
++                            <property name="visible">True</property>
++                            <property name="can_focus">False</property>
++                            <property name="use_underline">True</property>
++                            <property name="image">image_open_files_recursively1</property>
++                            <signal name="activate" handler="on_open_files_recursively1_activate" swapped="no"/>
++                          </object>
++                        </child>
++                        <child>
+                           <object class="GtkMenuItem" id="menu_open_selected_file1">
+                             <property name="visible">True</property>
+                             <property name="can_focus">False</property>
+@@ -6457,6 +6636,39 @@
+                           </object>
+                         </child>
+                         <child>
++                          <object class="GtkImageMenuItem" id="menu_reload_all1">
++                            <property name="label" translatable="yes">R_eload All</property>
++                            <property name="visible">True</property>
++                            <property name="can_focus">False</property>
++                            <property name="use_underline">True</property>
++                            <property name="image">image_reload_all1</property>
++                            <property name="use_stock">False</property>
++                            <signal name="activate" handler="on_reload_all1_activate" swapped="no"/>
++                          </object>
++                        </child>
++                        <child>
++                          <object class="GtkImageMenuItem" id="menu_rename1">
++                            <property name="label" translatable="yes">R_ename</property>
++                            <property name="visible">True</property>
++                            <property name="can_focus">False</property>
++                            <property name="use_underline">True</property>
++                            <property name="image">image_rename1</property>
++                            <property name="use_stock">False</property>
++                            <signal name="activate" handler="on_rename1_activate" swapped="no"/>
++                          </object>
++                        </child>
++                        <child>
++                          <object class="GtkImageMenuItem" id="menu_file_delete1">
++                            <property name="label" translatable="yes">_Delete</property>
++                            <property name="visible">True</property>
++                            <property name="can_focus">False</property>
++                            <property name="use_underline">True</property>
++                            <property name="image">image_file_delete1</property>
++                            <property name="use_stock">False</property>
++                            <signal name="activate" handler="on_file_delete1_activate" swapped="no"/>
++                          </object>
++                        </child>
++                        <child>
+                           <object class="GtkSeparatorMenuItem" id="separator21">
+                             <property name="visible">True</property>
+                             <property name="can_focus">False</property>
+diff --git a/doc/geany.1.in b/doc/geany.1.in
+index 8c3cea8..d177c91 100644
+--- a/doc/geany.1.in
++++ b/doc/geany.1.in
+@@ -40,6 +40,8 @@ Don't preprocess C/C++ files when generating tags.
+ .IP "\fB-i\fP, \fB\-\-new-instance\fP         " 10
+ Don't open files in a running instance, force opening a new instance.
+ Only available if Geany was compiled with support for Sockets.
++.IP "\fB-I\fP, \fB\-\-no-new-instance\fP         " 10
++Force not opening a new instance even if no file argument is passed.
+ .IP "\fB-l\fP, \fB\-\-line\fP         " 10
+ Set initial line number for the first opened file.
+ .IP "\fB\fP    \fB\-\-list\-documents\fP         " 10
+diff --git a/doc/geany.txt b/doc/geany.txt
+index bf007c2..59c0ee8 100644
+--- a/doc/geany.txt
++++ b/doc/geany.txt
+@@ -283,6 +283,9 @@ Short option  Long option              Function
+                                        a new instance. Only available if Geany was compiled
+                                        with support for Sockets.
+ 
++-I            --no-new-instance        Force not opening a new instance even if no file argument
++                                       is passed.
++
+ -l            --line                   Set initial line number for the first opened file.
+ 
+ *none*        --list-documents         Return a list of open documents in a running Geany
+@@ -509,14 +512,41 @@ order. It is not alphabetical as shown in the documents list
+ See the `Notebook tab keybindings`_ section for useful
+ shortcuts including for Most-Recently-Used document switching.
+ 
++Sorting tabs
++^^^^^^^^^^^^
++
++You can sort editor tabs based on the basic names of the opened files
++they represent (By filename), based on the complete path of those files
++(By pathname), or based on how they are sorted in the documents list in
++the sidebar when Show Paths is enabled (BY folder).  This can be done by
++activating the sort command item in the popup menu that's shown by
++right-clicking an editor tab.
++
++You can also activate the commands by using shortcut keys.  See
++`Notebook tab keybindings`_ section.
++
++Sorting tabs automatically
++^^^^^^^^^^^^^^^^^^^^^^^^^^
++
++Tabs can also be automatically sorted everytime a file or a group of
++files are opened, or when a document is saved to a new file.  This can
++be enabled in Preferences->Interface->Notebook tabs.  See `Editor tabs`_
++section.
++
+ Cloning documents
+ ^^^^^^^^^^^^^^^^^
++
+ The `Document->Clone` menu item copies the current document's text,
+ cursor position and properties into a new untitled document. If
+ there is a selection, only the selected text is copied. This can be
+ useful when making temporary copies of text or for creating
+ documents with similar or identical contents.
+ 
++The new document gets a filename based on the original document, and is 
++in the form of '<original_name>.cloneX' where X is a number ranging 
++from 0 to 99, but is not set if it is 0.  The name that doesn't point to
++an existing file and is not used by any document gets used.
++
+ 
+ Character sets and Unicode Byte-Order-Mark (BOM)
+ ------------------------------------------------
+@@ -1967,6 +1997,16 @@ Double-clicking hides all additional widgets
+     Whether to call the View->Toggle All Additional Widgets command
+     when double-clicking on a notebook tab.
+ 
++Automatically sort tabs
++    Whether to automatically sort editor tabs everytime files are
++    opened, or when documents are saved to a new file.
++
++    Sorting by filename means sorting it based on the basic name of the
++    file and it excludes the directory parts, while sorting by pathname
++    means sorting it based on the complete path of the file.  Sorting
++    tabs by folder on the other hand makes the resulting arrangement the
++    same as the one in the documents list when Show Paths is enabled.
++
+ Tab positions
+ `````````````
+ 
+@@ -2718,6 +2758,10 @@ Don't use run script
+     This can be useful if you already have a program running in the VTE
+     like a Python console (e.g. ipython). Use this with care.
+ 
++Draw intense colors in bold fonts
++    Use bold fonts when displaying characters that have the high-intensity
++    attribute.
++
+ 
+ Project management
+ ------------------
+@@ -3313,6 +3357,8 @@ New                             Ctrl-N  (C)               Creates a new file.
+ 
+ Open                            Ctrl-O  (C)               Opens a file.
+ 
++Open files recursively                                    Opens files recursively.
++
+ Open selected file              Ctrl-Shift-O              Opens the selected filename.
+ 
+ Re-open last closed tab                                   Re-opens the last closed document tab.
+@@ -3710,6 +3756,15 @@ Move document right             Ctrl-Shift-PageDown       Changes the current do
+ Move document first                                       Moves the current document to the first position.
+ 
+ Move document last                                        Moves the current document to the last position.
++
++Sort tabs by filename                                     Sorts tabs based on the basic name of the file.
++
++Sort tabs by pathname                                     Sorts tabs based on the complete path of the file.
++
++Sort tabs by folder                                       Sorts tabs based on how they are arranged in the
++                                                          documents list in the sidebar when Show Paths is
++                                                          enabled.
++
+ =============================== ========================= ==================================================
+ 
+ 
+@@ -3801,6 +3856,16 @@ Show Color Chooser                                        Opens the Color Choose
+ =============================== ========================= ==================================================
+ 
+ 
++Sidebar keybindings
++```````````````````
++
++=============================== ========================= ==================================================
++Action                          Default shortcut          Description
++=============================== ========================= ==================================================
++Rename File                                               Renames file in-place in the Documents tab
++=============================== ========================= ==================================================
++
++
+ Help keybindings
+ ````````````````
+ =============================== ========================= ==================================================
+diff --git a/src/callbacks.c b/src/callbacks.c
+index 1177925..1bbb891 100644
+--- a/src/callbacks.c
++++ b/src/callbacks.c
+@@ -93,7 +93,7 @@ static gboolean on_window_delete_event(GtkWidget *widget, GdkEvent *event, gpoin
+ 
+ void on_new1_activate(GtkMenuItem *menuitem, gpointer user_data)
+ {
+-	document_new_file(NULL, NULL, NULL);
++	document_new_file_in_default_dir(NULL, NULL, NULL, TRUE);
+ }
+ 
+ 
+@@ -179,6 +179,10 @@ static void on_file1_activate(GtkMenuItem *menuitem, gpointer user_data)
+ 						g_queue_get_length(ui_prefs.recent_queue) > 0);
+ 	/* hide Page setup when GTK printing is not used */
+ 	ui_widget_show_hide(ui_widgets.print_page_setup, printing_prefs.use_gtk_printing);
++
++	GeanyDocument *doc = document_get_current();
++	gtk_widget_set_sensitive(ui_widgets.rename_menuitem, doc && doc->file_name);
++	gtk_widget_set_sensitive(ui_widgets.delete_file_menuitem, doc && doc->real_path);
+ }
+ 
+ 
+@@ -313,7 +317,14 @@ static void on_info1_activate(GtkMenuItem *menuitem, gpointer user_data)
+ /* open file */
+ void on_open1_activate(GtkMenuItem *menuitem, gpointer user_data)
+ {
+-	dialogs_show_open_file();
++	dialogs_show_open_file(FALSE, NULL);
++}
++
++
++/* open files recursively */
++void on_open_files_recursively1_activate(GtkMenuItem *menuitem, gpointer user_data)
++{
++	dialogs_show_open_file(TRUE, NULL);
+ }
+ 
+ 
+@@ -328,6 +339,46 @@ void on_toolbutton_reload_clicked(GtkAction *action, gpointer user_data)
+ }
+ 
+ 
++/* reload all documents */
++void on_reload_all1_activate(GtkMenuItem *menuitem, gpointer user_data)
++{
++	gint i;
++
++	if (dialogs_show_question_full(NULL, _("_Reload"), GTK_STOCK_CANCEL,
++			_("Any unsaved changes and undo history will be lost."),
++			_("Reload all opened documents?")))
++	{
++		gint i;
++
++		foreach_document(i)
++		{
++			GeanyDocument *doc = documents[i];
++
++			if (doc->real_path)
++				document_reload_force(doc, NULL);
++		}
++	}
++}
++
++
++/* rename file */
++void on_rename1_activate(GtkMenuItem *menuitem, gpointer user_data)
++{
++	GeanyDocument *doc = document_get_current();
++
++	g_return_if_fail(doc && doc->file_name);
++
++	document_rename_prompt(doc);
++}
++
++
++/* delete file and close document */
++void on_file_delete1_activate(GtkAction *action, gpointer user_data)
++{
++	document_delete_prompt(document_get_current());
++}
++
++
+ static void on_change_font1_activate(GtkMenuItem *menuitem, gpointer user_data)
+ {
+ 	dialogs_show_open_font();
+diff --git a/src/callbacks.h b/src/callbacks.h
+index c77b781..15f0b36 100644
+--- a/src/callbacks.h
++++ b/src/callbacks.h
+@@ -41,6 +41,8 @@ void on_quit1_activate(GtkMenuItem *menuitem, gpointer user_data);
+ 
+ void on_open1_activate(GtkMenuItem *menuitem, gpointer user_data);
+ 
++void on_open_files_recursively1_activate(GtkMenuItem *menuitem, gpointer user_data);
++
+ void on_save_all1_activate(GtkMenuItem *menuitem, gpointer user_data);
+ 
+ void on_close1_activate(GtkMenuItem *menuitem, gpointer user_data);
+@@ -99,6 +101,10 @@ void on_find_in_files1_activate(GtkMenuItem *menuitem, gpointer user_data);
+ 
+ void on_toolbutton_reload_clicked(GtkAction *action, gpointer user_data);
+ 
++void on_reload_all1_activate(GtkMenuItem *menuitem, gpointer user_data);
++
++void on_rename1_activate(GtkMenuItem *menuitem, gpointer user_data);
++
+ void on_go_to_line_activate(GtkMenuItem *menuitem, gpointer user_data);
+ 
+ void on_help1_activate(GtkMenuItem *menuitem, gpointer user_data);
+diff --git a/src/dialogs.c b/src/dialogs.c
+index c1a390f..8139dc1 100644
+--- a/src/dialogs.c
++++ b/src/dialogs.c
+@@ -62,7 +62,8 @@
+ enum
+ {
+ 	GEANY_RESPONSE_RENAME,
+-	GEANY_RESPONSE_VIEW
++	GEANY_RESPONSE_VIEW,
++	GEANY_RESPONSE_OPEN_RECURSIVELY
+ };
+ 
+ 
+@@ -124,11 +125,11 @@ static void file_chooser_set_filter_idx(GtkFileChooser *chooser, guint idx)
+ }
+ 
+ 
+-static gboolean open_file_dialog_handle_response(GtkWidget *dialog, gint response)
++static gboolean open_file_dialog_handle_response(GtkWidget *dialog, gint response, gboolean recursive)
+ {
+ 	gboolean ret = TRUE;
+ 
+-	if (response == GTK_RESPONSE_ACCEPT || response == GEANY_RESPONSE_VIEW)
++	if (response == GTK_RESPONSE_ACCEPT || response == GEANY_RESPONSE_VIEW || response == GEANY_RESPONSE_OPEN_RECURSIVELY)
+ 	{
+ 		GSList *filelist;
+ 		GeanyFiletype *ft = NULL;
+@@ -151,6 +152,15 @@ static gboolean open_file_dialog_handle_response(GtkWidget *dialog, gint respons
+ 			charset = encodings[filesel_state.open.encoding_idx].charset;
+ 
+ 		filelist = gtk_file_chooser_get_filenames(GTK_FILE_CHOOSER(dialog));
++
++		if (filelist == NULL && recursive)
++		{
++			gchar *path = gtk_file_chooser_get_current_folder(GTK_FILE_CHOOSER(dialog));
++
++			if (path)
++				filelist = g_slist_append(filelist, path);
++		}
++
+ 		if (filelist != NULL)
+ 		{
+ 			const gchar *first = filelist->data;
+@@ -163,7 +173,50 @@ static gboolean open_file_dialog_handle_response(GtkWidget *dialog, gint respons
+ 			}
+ 			else
+ 			{
+-				document_open_files(filelist, ro, ft, charset);
++				const gchar *only_dir = NULL;
++				gboolean opens_many = FALSE;
++
++				if (filelist->next)
++					opens_many = TRUE;
++				else if (g_file_test(filelist->data, G_FILE_TEST_IS_DIR))
++				{
++					opens_many = TRUE;
++					only_dir = filelist->data;
++				}
++
++				if (recursive && opens_many)
++				{
++					GtkFileFilter *filter = gtk_file_chooser_get_filter(GTK_FILE_CHOOSER(dialog));
++					const gchar *filter_name = gtk_file_filter_get_name(filter);
++					GError *error;
++					gchar *message;
++
++					if (only_dir)
++						message = g_strdup_printf(_("Open files in \"%s\" using filter \"%s\"?"),
++								only_dir, filter_name);
++					else
++						message = g_strdup_printf(_("Open files using filter \"%s\"?"),
++								filter_name);
++
++					if (dialogs_show_question_full(dialog, GTK_STOCK_YES, GTK_STOCK_NO,
++							_("This may take a while depending on the files and the filter."),
++							"%s", message))
++					{
++						document_open_files_recursively(filelist, ro, ft, charset, filter, &error);
++
++						if (error)
++						{
++							dialogs_show_msgbox(GTK_MESSAGE_ERROR, "%s", error->message);
++							g_error_free(error);
++						}
++					}
++					else
++						ret = FALSE;
++
++					g_free(message);
++				}
++				else
++					document_open_files(filelist, ro, ft, charset);
+ 			}
+ 			g_slist_foreach(filelist, (GFunc) g_free, NULL);	/* free filenames */
+ 		}
+@@ -368,23 +421,40 @@ static GtkWidget *add_file_open_extra_widget(GtkWidget *dialog)
+ }
+ 
+ 
+-static GtkWidget *create_open_file_dialog(void)
++static GtkWidget *create_open_file_dialog(gboolean recursive)
+ {
+ 	GtkWidget *dialog;
+ 	GtkWidget *viewbtn;
+ 	GSList *node;
++	const gchar *title, *open_button_text, *view_button_text;
++	gint open_response_id;
++
++	if (recursive)
++	{
++		title = _("Open Files Recursively");
++		open_button_text = _("_Open Recursively");
++		open_response_id = GEANY_RESPONSE_OPEN_RECURSIVELY;
++		view_button_text = _("_View Recursively");
++	}
++	else
++	{
++		title = _("Open File");
++		open_button_text = GTK_STOCK_OPEN;
++		open_response_id = GTK_RESPONSE_ACCEPT;
++		view_button_text = C_("Open dialog action", "_View");
++	}
+ 
+-	dialog = gtk_file_chooser_dialog_new(_("Open File"), GTK_WINDOW(main_widgets.window),
++	dialog = gtk_file_chooser_dialog_new(title, GTK_WINDOW(main_widgets.window),
+ 			GTK_FILE_CHOOSER_ACTION_OPEN, NULL, NULL);
+ 	gtk_widget_set_name(dialog, "GeanyDialog");
+ 
+-	viewbtn = gtk_dialog_add_button(GTK_DIALOG(dialog), C_("Open dialog action", "_View"), GEANY_RESPONSE_VIEW);
++	viewbtn = gtk_dialog_add_button(GTK_DIALOG(dialog), view_button_text, GEANY_RESPONSE_VIEW);
+ 	gtk_widget_set_tooltip_text(viewbtn,
+ 		_("Opens the file in read-only mode. If you choose more than one file to open, all files will be opened read-only."));
+ 
+ 	gtk_dialog_add_buttons(GTK_DIALOG(dialog),
+ 		GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+-		GTK_STOCK_OPEN, GTK_RESPONSE_ACCEPT, NULL);
++		open_button_text, open_response_id, NULL);
+ 	gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_ACCEPT);
+ 
+ 	gtk_widget_set_size_request(dialog, -1, 460);
+@@ -448,12 +518,16 @@ static void open_file_dialog_apply_settings(GtkWidget *dialog)
+ 
+ 
+ /* This shows the file selection dialog to open a file. */
+-void dialogs_show_open_file(void)
++void dialogs_show_open_file(gboolean recursive, const gchar *utf8_initial_dir)
+ {
+-	gchar *initdir;
++	gchar *initdir = NULL;
++
++	if (utf8_initial_dir)
++		initdir = g_strdup(utf8_initial_dir);
+ 
+ 	/* set dialog directory to the current file's directory, if present */
+-	initdir = utils_get_current_file_dir_utf8();
++	if (! initdir)
++		initdir = utils_get_current_file_dir_utf8();
+ 
+ 	/* use project or default startup directory (if set) if no files are open */
+ 	/** TODO should it only be used when initially open the dialog and not on every show? */
+@@ -463,12 +537,12 @@ void dialogs_show_open_file(void)
+ 	SETPTR(initdir, utils_get_locale_from_utf8(initdir));
+ 
+ #ifdef G_OS_WIN32
+-	if (interface_prefs.use_native_windows_dialogs)
++	if (interface_prefs.use_native_windows_dialogs && !recursive)
+ 		win32_show_document_open_dialog(GTK_WINDOW(main_widgets.window), _("Open File"), initdir);
+ 	else
+ #endif
+ 	{
+-		GtkWidget *dialog = create_open_file_dialog();
++		GtkWidget *dialog = create_open_file_dialog(recursive);
+ 
+ 		open_file_dialog_apply_settings(dialog);
+ 
+@@ -479,80 +553,38 @@ void dialogs_show_open_file(void)
+ 			gtk_file_chooser_add_shortcut_folder(GTK_FILE_CHOOSER(dialog),
+ 					app->project->base_path, NULL);
+ 
+-		while (!open_file_dialog_handle_response(dialog,
+-			gtk_dialog_run(GTK_DIALOG(dialog))));
++		while (!open_file_dialog_handle_response(dialog, gtk_dialog_run(GTK_DIALOG(dialog)),
++				recursive))
++			;
+ 		gtk_widget_destroy(dialog);
+ 	}
+ 	g_free(initdir);
+ }
+ 
+ 
+-static gboolean handle_save_as(const gchar *utf8_filename, gboolean rename_file)
+-{
+-	GeanyDocument *doc = document_get_current();
+-	gboolean success = FALSE;
+-
+-	g_return_val_if_fail(!EMPTY(utf8_filename), FALSE);
+-
+-	if (doc->file_name != NULL)
+-	{
+-		if (rename_file)
+-		{
+-			document_rename_file(doc, utf8_filename);
+-		}
+-		if (doc->tm_file)
+-		{
+-			/* create a new tm_source_file object otherwise tagmanager won't work correctly */
+-			tm_workspace_remove_source_file(doc->tm_file);
+-			tm_source_file_free(doc->tm_file);
+-			doc->tm_file = NULL;
+-		}
+-	}
+-	success = document_save_file_as(doc, utf8_filename);
+-
+-	build_menu_update(doc);
+-	return success;
+-}
+-
+-
+ static gboolean save_as_dialog_handle_response(GtkWidget *dialog, gint response)
+ {
+-	gboolean rename_file = FALSE;
+-	gboolean success = FALSE;
++	if (response == GTK_RESPONSE_DELETE_EVENT || response == GTK_RESPONSE_CANCEL)
++		return TRUE;
++
+ 	gchar *new_filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
++	gboolean success = FALSE;
+ 
+-	switch (response)
++	if (G_UNLIKELY(EMPTY(new_filename)))
++		utils_beep();
++	else
+ 	{
+-		case GEANY_RESPONSE_RENAME:
+-			/* rename doesn't check for empty filename or overwriting */
+-			if (G_UNLIKELY(EMPTY(new_filename)))
+-			{
+-				utils_beep();
+-				break;
+-			}
+-			if (g_file_test(new_filename, G_FILE_TEST_EXISTS) &&
+-				!dialogs_show_question_full(NULL, NULL, NULL,
+-					_("Overwrite?"),
+-					_("Filename already exists!")))
+-				break;
+-			rename_file = TRUE;
+-			/* fall through */
+-		case GTK_RESPONSE_ACCEPT:
+-		{
+-			gchar *utf8_filename;
++		gchar *utf8_filename = utils_get_utf8_from_locale(new_filename);
+ 
+-			utf8_filename = utils_get_utf8_from_locale(new_filename);
+-			success = handle_save_as(utf8_filename, rename_file);
+-			g_free(utf8_filename);
+-			break;
+-		}
+-		case GTK_RESPONSE_DELETE_EVENT:
+-		case GTK_RESPONSE_CANCEL:
+-			success = TRUE;
+-			break;
++		if (response == GEANY_RESPONSE_RENAME)
++			success = document_rename_and_save(document_get_current(), utf8_filename, TRUE);
++		else if (response == GTK_RESPONSE_ACCEPT)
++			success = document_save_file_as(document_get_current(), utf8_filename);
++
++		g_free(utf8_filename);
+ 	}
+-	g_free(new_filename);
+ 
++	g_free(new_filename);
+ 	return success;
+ }
+ 
+@@ -678,7 +710,10 @@ gboolean dialogs_show_save_as(void)
+ 		gchar *utf8_name = win32_show_document_save_as_dialog(GTK_WINDOW(main_widgets.window),
+ 						_("Save File"), doc);
+ 		if (utf8_name != NULL)
+-			result = handle_save_as(utf8_name, FALSE);
++		{
++			result = document_save_file_as(doc, utf8_name);
++			g_free(utf8_name);
++		}
+ 	}
+ 	else
+ #endif
+diff --git a/src/dialogs.h b/src/dialogs.h
+index 6198d38..1242615 100644
+--- a/src/dialogs.h
++++ b/src/dialogs.h
+@@ -52,7 +52,7 @@ gchar *dialogs_show_input(const gchar *title, GtkWindow *parent,
+ typedef void (*GeanyInputCallback)(const gchar *text, gpointer data);
+ 
+ 
+-void dialogs_show_open_file(void);
++void dialogs_show_open_file(gboolean recursive, const gchar *utf8_initial_dir);
+ 
+ gboolean dialogs_show_unsaved_file(GeanyDocument *doc);
+ 
+diff --git a/src/document.c b/src/document.c
+index 9fad86f..e261906 100644
+--- a/src/document.c
++++ b/src/document.c
+@@ -263,7 +263,7 @@ GeanyDocument *document_find_by_id(guint id)
+ 
+ 
+ /* gets the widget the main_widgets.notebook consider is its child for this document */
+-static GtkWidget *document_get_notebook_child(GeanyDocument *doc)
++GtkWidget *document_get_notebook_child(GeanyDocument *doc)
+ {
+ 	GtkWidget *parent;
+ 	GtkWidget *child;
+@@ -894,6 +894,101 @@ GeanyDocument *document_new_file(const gchar *utf8_filename, GeanyFiletype *ft,
+ }
+ 
+ 
++GeanyDocument *document_new_file_in_dir(const gchar *utf8_dirname, const gchar *utf8_basename,
++		GeanyFiletype *ft, const gchar *text, gboolean unique)
++{
++	g_return_val_if_fail(!EMPTY(utf8_dirname), NULL);
++
++	gchar *new_filename = NULL;
++	const gchar *basename_to_use = utf8_basename ? utf8_basename : GEANY_STRING_UNTITLED;
++
++	if (unique)
++	{
++		gchar *candidate;
++		guint i, j;
++
++		for (i = 0; i <= 99; ++i)
++		{
++			if (i == 0)
++				candidate = g_strdup_printf("%s" G_DIR_SEPARATOR_S "%s", utf8_dirname, basename_to_use);
++			else
++				candidate = g_strdup_printf("%s" G_DIR_SEPARATOR_S "%s%u", utf8_dirname,
++						basename_to_use, i);
++
++			gboolean unused = TRUE;
++
++			foreach_document(j)
++			{
++				if (documents[j]->file_name && strcmp(documents[j]->file_name, candidate) == 0)
++				{
++					unused = FALSE;
++					break;
++				}
++			}
++
++			if (unused)
++			{
++				gchar *locale_candidate = utils_get_locale_from_utf8(candidate);
++				gboolean file_exists = g_file_test(locale_candidate, G_FILE_TEST_EXISTS);
++				g_free(locale_candidate);
++
++				if (!file_exists)
++				{
++					new_filename = candidate;
++					break;
++				}
++			}
++
++			g_free(candidate);
++		}
++	}
++	else
++		new_filename = g_strdup_printf("%s" G_DIR_SEPARATOR_S "%s", utf8_dirname, basename_to_use);
++
++	document_new_file(new_filename ? new_filename : utf8_basename, ft, text);
++	g_free(new_filename);
++}
++
++
++GeanyDocument *document_new_file_in_default_dir(const gchar *utf8_basename, GeanyFiletype *ft,
++		const gchar *text, gboolean unique)
++{
++	gchar *dirname = NULL;
++
++	switch (file_prefs.default_new_file_dir)
++	{
++		case NEW_FILE_DIR_CURRENT_DOC:
++			dirname = utils_get_current_file_dir_utf8();
++			break;
++		case NEW_FILE_DIR_PROJECT:
++			if (app->project && !EMPTY(app->project->base_path))
++				dirname = g_strdup(app->project->base_path);
++
++			break;
++		case NEW_FILE_DIR_HOME:
++			dirname = utils_get_utf8_from_locale(g_get_home_dir());
++			break;
++		case NEW_FILE_DIR_ALL:
++			dirname = utils_get_current_file_dir_utf8();
++
++			if (!dirname)
++			{
++				if (app->project && !EMPTY(app->project->base_path))
++					dirname = g_strdup(app->project->base_path);
++				else
++					dirname = utils_get_utf8_from_locale(g_get_home_dir());
++			}
++	}
++
++	if (dirname)
++		document_new_file_in_dir(dirname, utf8_basename, ft, text, unique);
++	else
++		document_new_file(utf8_basename, ft, text);
++
++	g_free(dirname);
++}
++
++
+ /**
+  *  Opens a document specified by @a locale_filename.
+  *  Afterwards, the @c "document-open" signal is emitted for plugins.
+@@ -1565,6 +1660,138 @@ void document_open_files(const GSList *filenames, gboolean readonly, GeanyFilety
+ }
+ 
+ 
++static GFileEnumerator *enumerate_children(const char *dir_path, GError **error)
++{
++	GFile *file = g_file_new_for_path(dir_path);
++
++	const gchar *attributes = G_FILE_ATTRIBUTE_STANDARD_TYPE "," G_FILE_ATTRIBUTE_STANDARD_NAME ","
++			G_FILE_ATTRIBUTE_STANDARD_DISPLAY_NAME "," G_FILE_ATTRIBUTE_STANDARD_CONTENT_TYPE;
++
++	GFileEnumerator *enumerator = g_file_enumerate_children(file, attributes,
++			G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL, error);
++
++	g_object_unref(file);
++	return enumerator;
++}
++
++
++void document_open_files_recursively(const GSList *filenames, gboolean readonly, GeanyFiletype *ft,
++		const gchar *forced_enc, GtkFileFilter *filter, GError **error)
++{
++	const GSList *item;
++	gchar *file_path, *dir_path;
++	const gchar *filename;
++	GFileEnumerator *enumerator;
++	GFileInfo *file_info;
++	GFileType file_type;
++	GError *my_error = NULL;
++
++	typedef struct EnumeratorData
++	{
++		GFileEnumerator *enumerator;
++		gchar *dir_path;
++	} EnumeratorData;
++
++	const guint RECURSION_LIMIT = 100;
++	const guint ENUM_STACK_SIZE = RECURSION_LIMIT - 1;
++	EnumeratorData enum_stack[ENUM_STACK_SIZE];
++	guint enum_stack_index = 0;
++
++	GtkFileFilterInfo filter_info;
++	filter_info.contains = GTK_FILE_FILTER_FILENAME|GTK_FILE_FILTER_DISPLAY_NAME|GTK_FILE_FILTER_MIME_TYPE;
++	filter_info.uri = NULL;
++
++	for (item = filenames; item != NULL; item = g_slist_next(item))
++	{
++		file_path = item->data;
++
++		if (g_file_test(file_path, G_FILE_TEST_IS_DIR))
++		{
++			dir_path = file_path;
++			enumerator = enumerate_children(dir_path, &my_error);
++
++			while (TRUE)
++			{
++				while (my_error == NULL)
++				{
++					file_info = g_file_enumerator_next_file(enumerator, NULL, &my_error);
++
++					if (file_info == NULL)
++						break;
++
++					file_type = g_file_info_get_file_type(file_info);
++
++					if (file_type != G_FILE_TYPE_SYMBOLIC_LINK)
++					{
++						filename = g_file_info_get_name(file_info);
++
++						if (filename == NULL)
++							my_error = g_error_new(0, 0, "Failed to get filename of a file");
++						else
++						{
++							if (file_type == G_FILE_TYPE_DIRECTORY)
++							{
++								if (enum_stack_index == ENUM_STACK_SIZE)
++									my_error = g_error_new(0, 0, "Recursion depth limit reached");
++								else
++								{
++									enum_stack[enum_stack_index].enumerator = enumerator;
++									enum_stack[enum_stack_index++].dir_path = dir_path;
++
++									dir_path = g_build_filename(dir_path, filename, NULL);
++									enumerator = enumerate_children(dir_path, &my_error);
++								}
++							}
++							else
++							{
++								file_path = g_build_filename(dir_path, filename, NULL);
++
++								if (file_path)
++								{
++									filter_info.filename = filename;
++									filter_info.display_name = g_file_info_get_display_name(file_info);
++									filter_info.mime_type = g_file_info_get_content_type(file_info);
++
++									if (gtk_file_filter_filter(filter, &filter_info))
++										document_open_file(file_path, readonly, ft, forced_enc);
++
++									g_free(file_path);
++								}
++							}
++						}
++					}
++
++					g_object_unref(file_info);
++				}
++
++				g_object_unref(enumerator);
++
++				if (enum_stack_index == 0)
++					break;
++
++				g_free(dir_path);
++				enumerator = enum_stack[--enum_stack_index].enumerator;
++				dir_path = enum_stack[enum_stack_index].dir_path;
++			}
++		}
++		else
++			document_open_file(file_path, readonly, ft, forced_enc);
++	}
++
++	if (my_error)
++	{
++		if (error)
++			*error = g_error_new(my_error->domain, my_error->code,
++					"Failed to open files recursively: %s", my_error->message);
++
++		g_error_free(my_error);
++	}
++	else
++		if (error)
++			*error = NULL;
++}
++
++
+ static void on_keep_edit_history_on_reload_response(GtkWidget *bar, gint response_id, GeanyDocument *doc)
+ {
+ 	if (response_id == GTK_RESPONSE_NO)
+@@ -1662,6 +1889,37 @@ gboolean document_reload_prompt(GeanyDocument *doc, const gchar *forced_enc)
+ }
+ 
+ 
++gboolean document_delete_prompt(GeanyDocument *doc)
++{
++	g_return_val_if_fail(DOC_VALID(doc), FALSE);
++	g_return_val_if_fail(doc->real_path != NULL, FALSE);
++	g_return_val_if_fail(doc->file_name != NULL, FALSE);
++
++	gboolean ret = FALSE;
++
++	if (dialogs_show_question_full(NULL, _("_Delete"), GTK_STOCK_CANCEL,
++			_("This will remove the file from the filesystem and close the document."),
++			_("Delete '%s'?"), doc->file_name))
++	{
++		gchar *file_name_locale = utils_get_locale_from_utf8(doc->file_name);
++
++		if (g_remove(file_name_locale) == 0)
++		{
++			ret = TRUE;
++			doc->changed = FALSE;
++			document_close(doc);
++		}
++		else
++			dialogs_show_msgbox_with_secondary(GTK_MESSAGE_ERROR,
++					_("Failed to delete file."), g_strerror(errno));
++
++		g_free(file_name_locale);
++	}
++
++	return ret;
++}
++
++
+ static void document_update_timestamp(GeanyDocument *doc, const gchar *locale_filename)
+ {
+ #ifndef USE_GIO_FILEMON
+@@ -1764,6 +2022,109 @@ void document_rename_file(GeanyDocument *doc, const gchar *new_filename)
+ }
+ 
+ 
++gboolean document_rename_file_and_save(GeanyDocument *doc, const gchar *new_filename)
++{
++	g_return_val_if_fail(DOC_VALID(doc), FALSE);
++	g_return_val_if_fail(doc->file_name != NULL, FALSE);
++	g_return_val_if_fail(doc->real_path != NULL, FALSE);
++	g_return_val_if_fail(new_filename != NULL, FALSE);
++
++	gchar *old_locale_filename = utils_get_locale_from_utf8(doc->file_name);
++	gchar *new_locale_filename = utils_get_locale_from_utf8(new_filename);
++
++	FileDiskStatus orig_file_disk_status = doc->priv->file_disk_status;
++	document_stop_file_monitoring(doc);
++
++	gboolean success = g_rename(old_locale_filename, new_locale_filename) == 0;
++
++	if (success)
++	{
++		doc->priv->file_disk_status = FILE_CHANGED;
++		success = document_save_file_as(doc, new_filename);
++	}
++	else
++	{
++		dialogs_show_msgbox_with_secondary(GTK_MESSAGE_ERROR,
++				_("Error renaming file."), g_strerror(errno));
++		monitor_file_setup(doc);
++		doc->priv->file_disk_status = orig_file_disk_status;
++	}
++
++	g_free(new_locale_filename);
++	g_free(old_locale_filename);
++
++	return success;
++}
++
++
++gboolean document_rename_and_save(GeanyDocument *doc, const gchar *new_filename, gboolean ask_overwrite)
++{
++	g_return_val_if_fail(DOC_VALID(doc), FALSE);
++	g_return_val_if_fail(new_filename != NULL, FALSE);
++
++	gchar *new_locale_filename = utils_get_locale_from_utf8(new_filename);
++	gboolean ret = FALSE;
++
++	if (g_file_test(new_locale_filename, G_FILE_TEST_EXISTS))
++	{
++		if (g_file_test(new_locale_filename, G_FILE_TEST_IS_DIR))
++		{
++			dialogs_show_msgbox(GTK_MESSAGE_ERROR,
++					_("A directory with the same name already exists."));
++			goto cleanup;
++		}
++
++		if (ask_overwrite)
++			if (!dialogs_show_question_full(main_widgets.window, NULL, NULL, _("Overwrite?"),
++							_("Filename already exists!")))
++				goto cleanup;
++	}
++
++	if (doc->file_name && doc->real_path)
++		ret = document_rename_file_and_save(doc, new_filename);
++	else
++		ret = document_save_file_as(doc, new_filename);
++
++cleanup:
++	g_free(new_locale_filename);
++
++	return ret;
++}
++
++
++gboolean document_rename_prompt(GeanyDocument *doc)
++{
++	g_return_val_if_fail(doc && doc->file_name, FALSE);
++
++	gchar *basename = g_path_get_basename(doc->file_name);
++
++	gchar *new_basename = dialogs_show_input("Rename File", GTK_WINDOW(main_widgets.window),
++								"This will automatically save the data.", basename);
++
++	gboolean ret = FALSE;
++
++	if (new_basename)
++	{
++		if (*new_basename && strcmp(basename, new_basename) != 0)
++		{
++			gchar *dirname = g_path_get_dirname(doc->file_name);
++			gchar *new_filename = g_strconcat(dirname, G_DIR_SEPARATOR_S, new_basename, NULL);
++
++			ret = document_rename_and_save(doc, new_filename, TRUE);
++
++			g_free(new_filename);
++			g_free(dirname);
++		}
++
++		g_free(new_basename);
++	}
++
++	g_free(basename);
++
++	return ret;
++}
++
++
+ static void protect_document(GeanyDocument *doc)
+ {
+ 	/* do not call queue_colourise because to we want to keep the text-changed indication! */
+@@ -1844,6 +2205,14 @@ gboolean document_save_file_as(GeanyDocument *doc, const gchar *utf8_fname)
+ 		doc->readonly = FALSE;
+ 		if (doc->priv->protected > 0)
+ 			unprotect_document(doc);
++
++		if (doc->tm_file)
++		{
++			/* create a new tm_source_file object otherwise tagmanager won't work correctly. */
++			tm_workspace_remove_source_file(doc->tm_file);
++			tm_source_file_free(doc->tm_file);
++			doc->tm_file = NULL;
++		}
+ 	}
+ 
+ 	replace_header_filename(doc);
+@@ -1857,6 +2226,9 @@ gboolean document_save_file_as(GeanyDocument *doc, const gchar *utf8_fname)
+ 
+ 	if (ret)
+ 		ui_add_recent_document(doc);
++
++	build_menu_update(doc);
++
+ 	return ret;
+ }
+ 
+@@ -3330,7 +3702,7 @@ GeanyDocument *document_index(gint idx)
+ 
+ GeanyDocument *document_clone(GeanyDocument *old_doc)
+ {
+-	gchar *text;
++	gchar *text, *new_filename = NULL;
+ 	GeanyDocument *doc;
+ 	ScintillaObject *old_sci;
+ 
+@@ -3341,7 +3713,49 @@ GeanyDocument *document_clone(GeanyDocument *old_doc)
+ 	else
+ 		text = sci_get_contents(old_sci, -1);
+ 
+-	doc = document_new_file(NULL, old_doc->file_type, text);
++	/* create a new filename based on the old filename */
++	if (old_doc->file_name)
++	{
++		gchar *candidate;
++		guint i, j;
++
++		for (i = 0; i <= 99; ++i)
++		{
++			if (i == 0)
++				candidate = g_strdup_printf("%s.clone", old_doc->file_name);
++			else
++				candidate = g_strdup_printf("%s.clone%u", old_doc->file_name, i);
++
++			gboolean unused = TRUE;
++
++			foreach_document(j)
++			{
++				if (documents[j]->file_name && strcmp(documents[j]->file_name, candidate) == 0)
++				{
++					unused = FALSE;
++					break;
++				}
++			}
++
++			if (unused)
++			{
++				gchar *locale_candidate = utils_get_locale_from_utf8(candidate);
++				gboolean file_exists = g_file_test(locale_candidate, G_FILE_TEST_EXISTS);
++				g_free(locale_candidate);
++
++				if (!file_exists)
++				{
++					new_filename = candidate;
++					break;
++				}
++			}
++
++			g_free(candidate);
++		}
++	}
++
++	doc = document_new_file(new_filename, old_doc->file_type, text);
++	g_free(new_filename);
+ 	g_free(text);
+ 	document_set_text_changed(doc, TRUE);
+ 
+@@ -3351,11 +3765,13 @@ GeanyDocument *document_clone(GeanyDocument *old_doc)
+ 	doc->editor->auto_indent = old_doc->editor->auto_indent;
+ 	editor_set_indent(doc->editor, old_doc->editor->indent_type,
+ 		old_doc->editor->indent_width);
+-	doc->readonly = old_doc->readonly;
+ 	doc->has_bom = old_doc->has_bom;
+ 	doc->priv->protected = 0;
+ 	document_set_encoding(doc, old_doc->encoding);
+ 	sci_set_lines_wrapped(doc->editor->sci, doc->editor->line_wrapping);
++
++	/* do not set cloned documents as readonly */
++	doc->readonly = FALSE;
+ 	sci_set_readonly(doc->editor->sci, doc->readonly);
+ 
+ 	/* update ui */
+diff --git a/src/document.h b/src/document.h
+index ad3716b..1662f34 100644
+--- a/src/document.h
++++ b/src/document.h
+@@ -66,6 +66,7 @@ typedef struct GeanyFilePrefs
+ 	gboolean		tab_close_switch_to_mru;
+ 	gboolean		keep_edit_history_on_reload; /* Keep undo stack upon, and allow undoing of, document reloading. */
+ 	gboolean		show_keep_edit_history_on_reload_msg; /* whether to show the message introducing the above feature */
++	gint			default_new_file_dir;
+ }
+ GeanyFilePrefs;
+ 
+@@ -234,11 +235,26 @@ GeanyDocument *document_find_by_id(guint id);
+ extern GeanyFilePrefs file_prefs;
+ extern GPtrArray *documents_array;
+ 
++typedef enum DefaultNewFileDirectory
++{
++	NEW_FILE_DIR_NONE,
++	NEW_FILE_DIR_CURRENT_DOC,
++	NEW_FILE_DIR_PROJECT,
++	NEW_FILE_DIR_HOME,
++	NEW_FILE_DIR_ALL
++} DefaultNewFileDirectory;
++
+ 
+ /* These functions will replace the older functions. For now they have a documents_ prefix. */
+ 
+ GeanyDocument* document_new_file_if_non_open(void);
+ 
++GeanyDocument *document_new_file_in_dir(const gchar *utf8_dirname, const gchar *utf8_basename,
++		GeanyFiletype *ft, const gchar *text, gboolean unique);
++
++GeanyDocument *document_new_file_in_default_dir(const gchar *utf8_basename, GeanyFiletype *ft,
++		const gchar *text, gboolean unique);
++
+ gboolean document_reload_prompt(GeanyDocument *doc, const gchar *forced_enc);
+ 
+ void document_reload_config(GeanyDocument *doc);
+@@ -314,6 +330,8 @@ void document_apply_indent_settings(GeanyDocument *doc);
+ 
+ void document_grab_focus(GeanyDocument *doc);
+ 
++gboolean document_delete_prompt(GeanyDocument *doc);
++
+ GeanyDocument *document_clone(GeanyDocument *old_doc);
+ 
+ gpointer document_get_data(const GeanyDocument *doc, const gchar *key);
+@@ -323,6 +341,17 @@ void document_set_data(GeanyDocument *doc, const gchar *key, gpointer data);
+ void document_set_data_full(GeanyDocument *doc, const gchar *key,
+ 	gpointer data, GDestroyNotify free_func);
+ 
++GtkWidget *document_get_notebook_child(GeanyDocument *doc);
++
++void document_open_files_recursively(const GSList *filenames, gboolean readonly, GeanyFiletype *ft,
++		const gchar *forced_enc, GtkFileFilter *filter, GError **error);
++
++gboolean document_rename_file_and_save(GeanyDocument *doc, const gchar *new_filename);
++
++gboolean document_rename_and_save(GeanyDocument *doc, const gchar *new_filename, gboolean ask_overwrite);
++
++gboolean document_rename_prompt(GeanyDocument *doc);
++
+ #endif /* GEANY_PRIVATE */
+ 
+ G_END_DECLS
+diff --git a/src/keybindings.c b/src/keybindings.c
+index 72a9e4a..ab6c111 100644
+--- a/src/keybindings.c
++++ b/src/keybindings.c
+@@ -106,6 +106,7 @@ static void cb_func_switch_tableft(guint key_id);
+ static void cb_func_switch_tabright(guint key_id);
+ static void cb_func_switch_tablastused(guint key_id);
+ static void cb_func_move_tab(guint key_id);
++static void cb_func_sort_tabs(guint key_id);
+ 
+ static void add_popup_menu_accels(void);
+ 
+@@ -322,6 +323,7 @@ static void init_default_kb(void)
+ 	ADD_KB_GROUP(GEANY_KEY_GROUP_HELP, _("Help"), NULL);
+ 	ADD_KB_GROUP(GEANY_KEY_GROUP_FOCUS, _("Focus"), cb_func_switch_action);
+ 	ADD_KB_GROUP(GEANY_KEY_GROUP_NOTEBOOK, _("Notebook tab"), NULL);
++	ADD_KB_GROUP(GEANY_KEY_GROUP_SIDEBAR, _("Sidebar"), NULL);
+ 
+ 	/* Init all fields of keys with default values.
+ 	 * The menu_item field is always the main menu item, popup menu accelerators are
+@@ -333,6 +335,8 @@ static void init_default_kb(void)
+ 		GDK_n, GEANY_PRIMARY_MOD_MASK, "menu_new", _("New"), "menu_new1");
+ 	add_kb(group, GEANY_KEYS_FILE_OPEN, NULL,
+ 		GDK_o, GEANY_PRIMARY_MOD_MASK, "menu_open", _("Open"), "menu_open1");
++	add_kb(group, GEANY_KEYS_FILE_OPENRECURSIVE, NULL,
++		0, 0, "menu_open_files_recursively", _("Open files recursively"), "menu_open_files_recursively1");
+ 	add_kb(group, GEANY_KEYS_FILE_OPENSELECTED, NULL,
+ 		GDK_o, GDK_SHIFT_MASK | GEANY_PRIMARY_MOD_MASK, "menu_open_selected",
+ 		_("Open selected file"), "menu_open_selected_file1");
+@@ -354,6 +358,10 @@ static void init_default_kb(void)
+ 		"menu_close_all1");
+ 	add_kb(group, GEANY_KEYS_FILE_RELOAD, NULL,
+ 		GDK_r, GEANY_PRIMARY_MOD_MASK, "menu_reloadfile", _("Reload file"), "menu_reload1");
++	add_kb(group, GEANY_KEYS_FILE_RELOAD_ALL, NULL,
++		0, 0, "menu_reloadall", _("Reload all"), "menu_reload_all1");
++	add_kb(group, GEANY_KEYS_FILE_RENAME, NULL,
++		0, 0, "menu_renamefile", _("Rename file"), "menu_rename1");
+ 	add_kb(group, GEANY_KEYS_FILE_OPENLASTTAB, NULL,
+ 		0, 0, "file_openlasttab", _("Re-open last closed tab"), NULL);
+ 	add_kb(group, GEANY_KEYS_FILE_QUIT, NULL,
+@@ -653,6 +661,12 @@ static void init_default_kb(void)
+ 		0, 0, "move_tabfirst", _("Move document first"), NULL);
+ 	add_kb(group, GEANY_KEYS_NOTEBOOK_MOVETABLAST, cb_func_move_tab,
+ 		0, 0, "move_tablast", _("Move document last"), NULL);
++	add_kb(group, GEANY_KEYS_NOTEBOOK_SORTTABSBYFILENAME, cb_func_sort_tabs,
++		0, 0, "sort_tabs_by_filename", _("Sort tabs by filename"), NULL);
++	add_kb(group, GEANY_KEYS_NOTEBOOK_SORTTABSBYPATHNAME, cb_func_sort_tabs,
++		0, 0, "sort_tabs_by_filepath", _("Sort tabs by pathname"), NULL);
++	add_kb(group, GEANY_KEYS_NOTEBOOK_SORTTABSBYFOLDER, cb_func_sort_tabs,
++		0, 0, "sort_tabs_by_folder", _("Sort tabs by folder"), NULL);
+ 
+ 	group = keybindings_get_core_group(GEANY_KEY_GROUP_DOCUMENT);
+ 
+@@ -712,6 +726,11 @@ static void init_default_kb(void)
+ 
+ 	add_kb(group, GEANY_KEYS_HELP_HELP, cb_func_menu_help,
+ 		GDK_F1, 0, "menu_help", _("Help"), "help1");
++
++	group = keybindings_get_core_group(GEANY_KEY_GROUP_SIDEBAR);
++
++	add_kb(group, GEANY_KEYS_SIDEBAR_RENAME_FILE, sidebar_rename_file_cb,
++		0, 0, "sidebar_rename_file", _("Rename File"), NULL);
+ }
+ 
+ 
+@@ -1424,11 +1443,14 @@ static gboolean cb_func_file_action(guint key_id)
+ 	switch (key_id)
+ 	{
+ 		case GEANY_KEYS_FILE_NEW:
+-			document_new_file(NULL, NULL, NULL);
++			on_new1_activate(NULL, NULL);
+ 			break;
+ 		case GEANY_KEYS_FILE_OPEN:
+ 			on_open1_activate(NULL, NULL);
+ 			break;
++		case GEANY_KEYS_FILE_OPENRECURSIVE:
++			on_open_files_recursively1_activate(NULL, NULL);
++			break;
+ 		case GEANY_KEYS_FILE_OPENSELECTED:
+ 			on_menu_open_selected_file1_activate(NULL, NULL);
+ 			break;
+@@ -1458,6 +1480,12 @@ static gboolean cb_func_file_action(guint key_id)
+ 		case GEANY_KEYS_FILE_RELOAD:
+ 			on_toolbutton_reload_clicked(NULL, NULL);
+ 			break;
++		case GEANY_KEYS_FILE_RELOAD_ALL:
++			on_reload_all1_activate(NULL, NULL);
++			break;
++		case GEANY_KEYS_FILE_RENAME:
++			on_rename1_activate(NULL, NULL);
++			break;
+ 		case GEANY_KEYS_FILE_PRINT:
+ 			on_print1_activate(NULL, NULL);
+ 			break;
+@@ -1943,6 +1971,22 @@ static void cb_func_move_tab(guint key_id)
+ }
+ 
+ 
++static void cb_func_sort_tabs(guint key_id)
++{
++	switch (key_id)
++	{
++		case GEANY_KEYS_NOTEBOOK_SORTTABSBYFILENAME:
++			notebook_sort_tabs(NOTEBOOK_TAB_SORT_BY_FILENAME);
++			break;
++		case GEANY_KEYS_NOTEBOOK_SORTTABSBYPATHNAME:
++			notebook_sort_tabs(NOTEBOOK_TAB_SORT_BY_PATHNAME);
++			break;
++		case GEANY_KEYS_NOTEBOOK_SORTTABSBYFOLDER:
++			notebook_sort_tabs(NOTEBOOK_TAB_SORT_BY_FOLDER);
++	}
++}
++
++
+ static void goto_matching_brace(GeanyDocument *doc)
+ {
+ 	gint pos, new_pos;
+diff --git a/src/keybindings.h b/src/keybindings.h
+index aa2afef..551e84e 100644
+--- a/src/keybindings.h
++++ b/src/keybindings.h
+@@ -117,6 +117,7 @@ enum GeanyKeyGroupID
+ 	GEANY_KEY_GROUP_BUILD,			/**< Group. */
+ 	GEANY_KEY_GROUP_TOOLS,			/**< Group. */
+ 	GEANY_KEY_GROUP_HELP,			/**< Group. */
++	GEANY_KEY_GROUP_SIDEBAR,		/**< Group. */
+ 	GEANY_KEY_GROUP_COUNT	/* must not be used by plugins */
+ };
+ 
+@@ -274,6 +275,13 @@ enum GeanyKeyBindingID
+ 	GEANY_KEYS_FORMAT_SENDTOCMD8,				/**< Keybinding. */
+ 	GEANY_KEYS_FORMAT_SENDTOCMD9,				/**< Keybinding. */
+ 	GEANY_KEYS_EDITOR_DELETELINETOBEGINNING,	/**< Keybinding. */
++	GEANY_KEYS_NOTEBOOK_SORTTABSBYFILENAME,		/**< Keybinding. */
++	GEANY_KEYS_NOTEBOOK_SORTTABSBYPATHNAME,		/**< Keybinding. */
++	GEANY_KEYS_NOTEBOOK_SORTTABSBYFOLDER,		/**< Keybinding. */
++	GEANY_KEYS_FILE_OPENRECURSIVE,				/**< Keybinding. */
++	GEANY_KEYS_FILE_RELOAD_ALL,					/**< Keybinding. */
++	GEANY_KEYS_SIDEBAR_RENAME_FILE,				/**< Keybinding. */
++	GEANY_KEYS_FILE_RENAME,						/**< Keybinding. */
+ 	GEANY_KEYS_COUNT	/* must not be used by plugins */
+ };
+ 
+diff --git a/src/keyfile.c b/src/keyfile.c
+index 6a91988..1135353 100644
+--- a/src/keyfile.c
++++ b/src/keyfile.c
+@@ -43,6 +43,7 @@
+ #include "geanyobject.h"
+ #include "main.h"
+ #include "msgwindow.h"
++#include "notebook.h"
+ #include "prefs.h"
+ #include "printing.h"
+ #include "project.h"
+@@ -173,6 +174,8 @@ static void init_pref_groups(void)
+ 		"radio_msgwin_vertical", GTK_ORIENTATION_VERTICAL,
+ 		"radio_msgwin_horizontal", GTK_ORIENTATION_HORIZONTAL,
+ 		NULL);
++	stash_group_add_combo_box(group, &interface_prefs.notebook_auto_sort_tabs,
++		"notebook_auto_sort_tabs", NOTEBOOK_TAB_SORT_NONE, "combo_notebook_auto_sort_tabs");
+ 
+ 	/* editor display */
+ 	stash_group_add_toggle_button(group, &interface_prefs.highlighting_invert_all,
+@@ -223,6 +226,8 @@ static void init_pref_groups(void)
+ 		"mru_length", GEANY_DEFAULT_MRU_LENGTH, "spin_mru");
+ 	stash_group_add_spin_button_integer(group, &file_prefs.disk_check_timeout,
+ 		"disk_check_timeout", GEANY_DISK_CHECK_TIMEOUT, "spin_disk_check");
++	stash_group_add_combo_box(group, &file_prefs.default_new_file_dir,
++		"default_new_file_dir", NEW_FILE_DIR_NONE, "combo_default_new_file_dir");
+ 
+ 	/* various geany prefs */
+ 	group = stash_group_new(PACKAGE);
+@@ -533,6 +538,7 @@ static void save_dialog_prefs(GKeyFile *config)
+ 		g_key_file_set_boolean(config, "VTE", "run_in_vte", vc->run_in_vte);
+ 		g_key_file_set_boolean(config, "VTE", "skip_run_script", vc->skip_run_script);
+ 		g_key_file_set_boolean(config, "VTE", "cursor_blinks", vc->cursor_blinks);
++		g_key_file_set_boolean(config, "VTE", "allow_bold", vc->allow_bold);
+ 		g_key_file_set_integer(config, "VTE", "scrollback_lines", vc->scrollback_lines);
+ 		g_key_file_set_string(config, "VTE", "font", vc->font);
+ 		g_key_file_set_string(config, "VTE", "shell", vc->shell);
+@@ -888,6 +894,7 @@ static void load_dialog_prefs(GKeyFile *config)
+ 		vc->run_in_vte = utils_get_setting_boolean(config, "VTE", "run_in_vte", FALSE);
+ 		vc->skip_run_script = utils_get_setting_boolean(config, "VTE", "skip_run_script", FALSE);
+ 		vc->cursor_blinks = utils_get_setting_boolean(config, "VTE", "cursor_blinks", FALSE);
++		vc->allow_bold = utils_get_setting_boolean(config, "VTE", "allow_bold", TRUE);
+ 		vc->scrollback_lines = utils_get_setting_integer(config, "VTE", "scrollback_lines", 500);
+ 		get_setting_color(config, "VTE", "colour_fore", &vc->colour_fore, "#ffffff");
+ 		get_setting_color(config, "VTE", "colour_back", &vc->colour_back, "#000000");
+diff --git a/src/libmain.c b/src/libmain.c
+index fe4f377..cf4db51 100644
+--- a/src/libmain.c
++++ b/src/libmain.c
+@@ -112,6 +112,25 @@ static gboolean no_plugins = FALSE;
+ #endif
+ static gboolean dummy = FALSE;
+ 
++
++gboolean new_instance_mode_arg_callback(const gchar *option_name, const gchar *value, gpointer data, GError **error)
++{
++	gint len = strlen(option_name);
++
++	if (strncmp(option_name, "-i", len) == 0 || strncmp(option_name, "--new-instance", len) == 0 )
++		cl_options.new_instance_mode = NEW_INSTANCE_ENABLED;
++	else if (strncmp(option_name, "-I", len) == 0 || strncmp(option_name, "--no-new-instance", len) == 0 )
++		cl_options.new_instance_mode = NEW_INSTANCE_EXPLICITLY_DISABLED;
++	else
++	{
++		g_set_error(error, G_OPTION_ERROR, 64, "Fatal error: Unexpected mismatch in any of the options in callback function for '--new-instance' and '--no-new-instance'");
++		return FALSE;
++	}
++
++	return TRUE;
++}
++
++
+ /* in alphabetical order of short options */
+ static GOptionEntry entries[] =
+ {
+@@ -121,7 +140,8 @@ static GOptionEntry entries[] =
+ 	{ "generate-tags", 'g', 0, G_OPTION_ARG_NONE, &generate_tags, N_("Generate global tags file (see documentation)"), NULL },
+ 	{ "no-preprocessing", 'P', 0, G_OPTION_ARG_NONE, &no_preprocessing, N_("Don't preprocess C/C++ files when generating tags file"), NULL },
+ #ifdef HAVE_SOCKET
+-	{ "new-instance", 'i', 0, G_OPTION_ARG_NONE, &cl_options.new_instance, N_("Don't open files in a running instance, force opening a new instance"), NULL },
++	{ "new-instance", 'i', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, new_instance_mode_arg_callback, N_("Don't open files in a running instance, force opening a new instance"), NULL },
++	{ "no-new-instance", 'I', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, new_instance_mode_arg_callback, N_("Force not opening a new instance even if no file argument is passed"), NULL },
+ 	{ "socket-file", 0, 0, G_OPTION_ARG_FILENAME, &cl_options.socket_filename, N_("Use this socket filename for communication with a running Geany instance"), NULL },
+ 	{ "list-documents", 0, 0, G_OPTION_ARG_NONE, &cl_options.list_documents, N_("Return a list of open documents in a running Geany instance"), NULL },
+ #endif
+@@ -505,7 +525,7 @@ static void parse_command_line_options(gint *argc, gchar ***argv)
+ 	GError *error = NULL;
+ 	GOptionContext *context;
+ 	gint i;
+-	CommandLineOptions def_clo = {FALSE, NULL, TRUE, -1, -1, FALSE, FALSE, FALSE};
++	CommandLineOptions def_clo = {NEW_INSTANCE_DISABLED, NULL, TRUE, -1, -1, FALSE, FALSE, FALSE};
+ 
+ 	/* first initialise cl_options fields with default values */
+ 	cl_options = def_clo;
+@@ -604,7 +624,7 @@ static void parse_command_line_options(gint *argc, gchar ***argv)
+ 	}
+ 
+ #ifdef HAVE_SOCKET
+-	socket_info.ignore_socket = cl_options.new_instance;
++	socket_info.ignore_socket = cl_options.new_instance_mode == NEW_INSTANCE_ENABLED ? TRUE : FALSE;
+ 	if (cl_options.socket_filename)
+ 	{
+ 		socket_info.file_name = cl_options.socket_filename;
+@@ -930,7 +950,7 @@ static void load_startup_files(gint argc, gchar **argv)
+ 	 * 2. --no-session is not specified.
+ 	 * 3. We are a primary instance.
+ 	 * Has no effect if a CL project is loaded and using project-based session files. */
+-	if (prefs.load_session && cl_options.load_session && !cl_options.new_instance)
++	if (prefs.load_session && cl_options.load_session && cl_options.new_instance_mode != NEW_INSTANCE_ENABLED)
+ 	{
+ 		if (app->project == NULL)
+ 			load_session_project_file();
+@@ -1078,7 +1098,7 @@ gint main_lib(gint argc, gchar **argv)
+ 		socket_info.lock_socket = socket_init(argc, argv);
+ 		/* Quit if filenames were sent to first instance or the list of open
+ 		 * documents has been printed */
+-		if ((socket_info.lock_socket == -2 /* socket exists */ && argc > 1) ||
++		if ((socket_info.lock_socket == -2 /* socket exists */ && (argc > 1 || cl_options.new_instance_mode == NEW_INSTANCE_EXPLICITLY_DISABLED)) ||
+ 			cl_options.list_documents)
+ 		{
+ 			socket_finalize();
+@@ -1094,7 +1114,7 @@ gint main_lib(gint argc, gchar **argv)
+ 		else if (socket_info.lock_socket == -2 /* socket already exists */)
+ 		{
+ 			socket_info.ignore_socket = TRUE;
+-			cl_options.new_instance = TRUE;
++			cl_options.new_instance_mode = NEW_INSTANCE_ENABLED;
+ 		}
+ 	}
+ #endif
+diff --git a/src/main.h b/src/main.h
+index f2babac..cf023f5 100644
+--- a/src/main.h
++++ b/src/main.h
+@@ -36,9 +36,16 @@ gboolean main_is_realized(void);
+ 
+ #ifdef GEANY_PRIVATE
+ 
++typedef enum NewInstanceMode
++{
++	NEW_INSTANCE_EXPLICITLY_DISABLED,
++	NEW_INSTANCE_DISABLED,
++	NEW_INSTANCE_ENABLED
++} NewInstanceMode;
++
+ typedef struct
+ {
+-	gboolean	new_instance;
++	NewInstanceMode new_instance_mode;
+ 	gchar	   *socket_filename;
+ 	gboolean	load_session;
+ 	gint		goto_line;
+diff --git a/src/notebook.c b/src/notebook.c
+index f78d6c2..0d2dd75 100644
+--- a/src/notebook.c
++++ b/src/notebook.c
+@@ -34,6 +34,7 @@
+ #include "geanyobject.h"
+ #include "keybindings.h"
+ #include "main.h"
++#include "sidebar.h"
+ #include "support.h"
+ #include "ui_utils.h"
+ #include "utils.h"
+@@ -65,6 +66,8 @@ static gboolean switch_in_progress = FALSE;
+ static GtkWidget *switch_dialog = NULL;
+ static GtkWidget *switch_dialog_label = NULL;
+ 
++static gboolean doc_saves_to_new_file = FALSE;
++
+ 
+ static void
+ notebook_page_reordered_cb(GtkNotebook *notebook, GtkWidget *child, guint page_num,
+@@ -80,6 +83,14 @@ notebook_tab_close_clicked_cb(GtkButton *button, gpointer user_data);
+ 
+ static void setup_tab_dnd(void);
+ 
++void on_sort_tabs_by_filename_activate(GtkMenuItem *menuitem, gpointer user_data);
++void on_sort_tabs_by_pathname_activate(GtkMenuItem *menuitem, gpointer user_data);
++void on_sort_tabs_by_folder_activate(GtkMenuItem *menuitem, gpointer user_data);
++static void on_document_new(GObject *obj, GeanyDocument *doc);
++static void on_document_open(GObject *obj, GeanyDocument *doc);
++static void on_document_before_save(GObject *obj, GeanyDocument *doc);
++static void on_document_save(GObject *obj, GeanyDocument *doc);
++
+ 
+ static void update_mru_docs_head(GeanyDocument *doc)
+ {
+@@ -448,6 +459,31 @@ static void show_tab_bar_popup_menu(GdkEventButton *event, GeanyDocument *doc)
+ 	gtk_widget_show(menu_item);
+ 	gtk_container_add(GTK_CONTAINER(menu), menu_item);
+ 
++	menu_item = ui_image_menu_item_new(NULL, _("_Sort Tabs By"));
++	GtkWidget *submenu = gtk_menu_new();
++	gtk_menu_item_set_submenu(GTK_MENU_ITEM(menu_item), submenu);
++	gtk_widget_show(menu_item);
++	gtk_container_add(GTK_CONTAINER(menu), menu_item);
++
++	menu_item = ui_image_menu_item_new(NULL, _("_Filename"));
++	gtk_widget_show(menu_item);
++	gtk_container_add(GTK_CONTAINER(submenu), menu_item);
++	g_signal_connect(menu_item, "activate", G_CALLBACK(on_sort_tabs_by_filename_activate), NULL);
++
++	menu_item = ui_image_menu_item_new(NULL, _("P_athname"));
++	gtk_widget_show(menu_item);
++	gtk_container_add(GTK_CONTAINER(submenu), menu_item);
++	g_signal_connect(menu_item, "activate", G_CALLBACK(on_sort_tabs_by_pathname_activate), NULL);
++
++	menu_item = ui_image_menu_item_new(NULL, _("Fol_der"));
++	gtk_widget_show(menu_item);
++	gtk_container_add(GTK_CONTAINER(submenu), menu_item);
++	g_signal_connect(menu_item, "activate", G_CALLBACK(on_sort_tabs_by_folder_activate), NULL);
++
++	menu_item = gtk_separator_menu_item_new();
++	gtk_widget_show(menu_item);
++	gtk_container_add(GTK_CONTAINER(menu), menu_item);
++
+ 	menu_item = ui_image_menu_item_new(GTK_STOCK_OPEN, _("Open in New _Window"));
+ 	gtk_widget_show(menu_item);
+ 	gtk_container_add(GTK_CONTAINER(menu), menu_item);
+@@ -531,6 +567,11 @@ void notebook_init(void)
+ 	/* in case the switch dialog misses an event while drawing the dialog */
+ 	g_signal_connect(main_widgets.window, "key-release-event", G_CALLBACK(on_key_release_event), NULL);
+ 
++	g_signal_connect(geany_object, "document-new", G_CALLBACK(on_document_new), NULL);
++	g_signal_connect(geany_object, "document-open", G_CALLBACK(on_document_open), NULL);
++	g_signal_connect(geany_object, "document-before-save", G_CALLBACK(on_document_before_save), NULL);
++	g_signal_connect(geany_object, "document-save", G_CALLBACK(on_document_save), NULL);
++
+ 	setup_tab_dnd();
+ }
+ 
+@@ -754,6 +795,182 @@ void notebook_remove_page(gint page_num)
+ }
+ 
+ 
++static gchar *get_doc_dirname(const GeanyDocument *doc)
++{
++	return doc->real_path ? g_path_get_dirname(doc->real_path) : g_strdup("");
++}
++
++
++static gint compare_filenames(const gchar *a, const gchar *b)
++{
++	gchar *key_a = g_utf8_collate_key_for_filename(a, -1);
++	gchar *key_b = g_utf8_collate_key_for_filename(b, -1);
++	gint cmp = strcmp(key_a, key_b);
++	g_free(key_b);
++	g_free(key_a);
++	return cmp;
++}
++
++
++static gint compare_docs_by_filename(gconstpointer a, gconstpointer b)
++{
++	gchar *base_a = g_path_get_basename(DOC_FILENAME(*(GeanyDocument **) a));
++	gchar *base_b = g_path_get_basename(DOC_FILENAME(*(GeanyDocument **) b));
++	gint cmp = compare_filenames(base_a, base_b);
++	g_free(base_b);
++	g_free(base_a);
++	return cmp;
++}
++
++
++static gint compare_docs_by_pathname(gconstpointer a, gconstpointer b)
++{
++	gchar *dir_a = get_doc_dirname(*(GeanyDocument **) a);
++	gchar *dir_b = get_doc_dirname(*(GeanyDocument **) b);
++	gint cmp = compare_filenames(dir_a, dir_b);
++
++	if (cmp == 0)
++		cmp = compare_docs_by_filename(a, b);
++
++	g_free(dir_b);
++	g_free(dir_a);
++	return cmp;
++}
++
++
++static gint compare_docs_by_folder(gconstpointer a, gconstpointer b)
++{
++	gchar *folder_a = sidebar_get_doc_folder(*(GeanyDocument **) a, NULL);
++	gchar *folder_b = sidebar_get_doc_folder(*(GeanyDocument **) b, NULL);
++	gint cmp = compare_filenames(folder_a, folder_b);
++
++	if (cmp == 0)
++		cmp = compare_docs_by_filename(a, b);
++
++	g_free(folder_b);
++	g_free(folder_a);
++	return cmp;
++}
++
++
++static GCompareFunc get_compare_func(NotebookTabSortMethod method)
++{
++	switch (method)
++	{
++		case NOTEBOOK_TAB_SORT_BY_FILENAME:
++			return compare_docs_by_filename;
++		case NOTEBOOK_TAB_SORT_BY_PATHNAME:
++			return compare_docs_by_pathname;
++		case NOTEBOOK_TAB_SORT_BY_FOLDER:
++			return compare_docs_by_folder;
++	}
++
++	return NULL;
++}
++
++
++static void move_tab(GeanyDocument *doc, gint pos)
++{
++	GtkWidget *child = document_get_notebook_child(doc);
++	g_assert(child != NULL);
++	gtk_notebook_reorder_child(GTK_NOTEBOOK(main_widgets.notebook), child, pos);
++}
++
++
++void notebook_sort_tabs(NotebookTabSortMethod method)
++{
++	GPtrArray *docs;
++	guint i;
++
++	docs = g_ptr_array_new();
++
++	foreach_document(i)
++		g_ptr_array_add(docs, documents[i]);
++
++	g_assert(method != NOTEBOOK_TAB_SORT_NONE);
++	g_ptr_array_sort(docs, get_compare_func(method));
++
++	for (i = 0; i < docs->len; ++i)
++	{
++		GeanyDocument *doc = g_ptr_array_index(docs, i);
++		move_tab(doc, i);
++	}
++
++	g_ptr_array_free(docs, TRUE);
++}
++
++
++void on_sort_tabs_by_filename_activate(GtkMenuItem *menuitem, gpointer user_data)
++{
++	notebook_sort_tabs(NOTEBOOK_TAB_SORT_BY_FILENAME);
++}
++
++
++void on_sort_tabs_by_pathname_activate(GtkMenuItem *menuitem, gpointer user_data)
++{
++	notebook_sort_tabs(NOTEBOOK_TAB_SORT_BY_PATHNAME);
++}
++
++
++void on_sort_tabs_by_folder_activate(GtkMenuItem *menuitem, gpointer user_data)
++{
++	notebook_sort_tabs(NOTEBOOK_TAB_SORT_BY_FOLDER);
++}
++
++
++static void gradually_sort_tab(GeanyDocument *doc, NotebookTabSortMethod method)
++{
++	GCompareFunc func = get_compare_func(method);
++
++	if (func)
++	{
++		gint i, pos, n_pages;
++		n_pages = gtk_notebook_get_n_pages(GTK_NOTEBOOK(main_widgets.notebook));
++
++		for (pos = 0, i = 0; i < n_pages; ++i)
++		{
++			GeanyDocument *doc_b = document_get_from_page(i);
++
++			if (doc_b != doc)
++			{
++				if (func(&doc, &doc_b) < 0)
++					break;
++
++				++pos;
++			}
++		}
++
++		move_tab(doc, pos);
++	}
++}
++
++
++static void on_document_new(GObject *obj, GeanyDocument *doc)
++{
++	if (doc->file_name)
++		gradually_sort_tab(doc, interface_prefs.notebook_auto_sort_tabs);
++}
++
++
++static void on_document_open(GObject *obj, GeanyDocument *doc)
++{
++	gradually_sort_tab(doc, interface_prefs.notebook_auto_sort_tabs);
++}
++
++
++static void on_document_before_save(GObject *obj, GeanyDocument *doc)
++{
++	doc_saves_to_new_file = doc->real_path == NULL;
++}
++
++
++static void on_document_save(GObject *obj, GeanyDocument *doc)
++{
++	if (doc_saves_to_new_file)
++		gradually_sort_tab(doc, interface_prefs.notebook_auto_sort_tabs);
++}
++
++
+ static void
+ on_window_drag_data_received(GtkWidget *widget, GdkDragContext *drag_context,
+ 		gint x, gint y, GtkSelectionData *data, guint target_type,
+diff --git a/src/notebook.h b/src/notebook.h
+index 46a3f6e..0c82ed8 100644
+--- a/src/notebook.h
++++ b/src/notebook.h
+@@ -46,6 +46,16 @@ void notebook_switch_tablastused(void);
+  * document yet). */
+ gboolean notebook_switch_in_progress(void);
+ 
++typedef enum NotebookTabSortMethod
++{
++	NOTEBOOK_TAB_SORT_NONE,
++	NOTEBOOK_TAB_SORT_BY_FILENAME,
++	NOTEBOOK_TAB_SORT_BY_PATHNAME,
++	NOTEBOOK_TAB_SORT_BY_FOLDER
++} NotebookTabSortMethod;
++
++void notebook_sort_tabs(NotebookTabSortMethod method);
++
+ G_END_DECLS
+ 
+ #endif /* GEANY_NOTEBOOK_H */
+diff --git a/src/prefs.c b/src/prefs.c
+index 714b7bc..dfd33ab 100644
+--- a/src/prefs.c
++++ b/src/prefs.c
+@@ -799,6 +799,9 @@ static void prefs_init_dialog(void)
+ 
+ 		widget = ui_lookup_widget(ui_widgets.prefs_dialog, "check_cursor_blinks");
+ 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(widget), vc->cursor_blinks);
++
++		widget = ui_lookup_widget(ui_widgets.prefs_dialog, "allow_bold");
++		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(widget), vc->allow_bold);
+ 	}
+ #endif
+ }
+@@ -1266,6 +1269,9 @@ on_prefs_dialog_response(GtkDialog *dialog, gint response, gpointer user_data)
+ 			widget = ui_lookup_widget(ui_widgets.prefs_dialog, "check_cursor_blinks");
+ 			vc->cursor_blinks = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget));
+ 
++			widget = ui_lookup_widget(ui_widgets.prefs_dialog, "allow_bold");
++			vc->allow_bold = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget));
++
+ 			vte_apply_user_settings();
+ 		}
+ #endif
+diff --git a/src/sidebar.c b/src/sidebar.c
+index 639da56..b826c12 100644
+--- a/src/sidebar.c
++++ b/src/sidebar.c
+@@ -31,6 +31,7 @@
+ 
+ #include "app.h"
+ #include "callbacks.h" /* FIXME: for ignore_callback */
++#include "dialogs.h"
+ #include "documentprivate.h"
+ #include "filetypesprivate.h"
+ #include "geanyobject.h"
+@@ -47,6 +48,10 @@
+ 
+ #include <gdk/gdkkeysyms.h>
+ 
++#include <errno.h>
++
++#include <glib/gstdio.h>
++
+ 
+ SidebarTreeviews tv = {NULL, NULL, NULL};
+ /* while typeahead searching, editor should not get focus */
+@@ -55,14 +60,21 @@ static gboolean may_steal_focus = FALSE;
+ static struct
+ {
+ 	GtkWidget *close;
++	GtkWidget *close_recursively;
++	GtkWidget *new;
++	GtkWidget *open;
+ 	GtkWidget *save;
++	GtkWidget *save_as;
+ 	GtkWidget *reload;
++	GtkWidget *rename;
++	GtkWidget *clone;
++	GtkWidget *delete;
+ 	GtkWidget *show_paths;
+ 	GtkWidget *find_in_files;
+ 	GtkWidget *expand_all;
+ 	GtkWidget *collapse_all;
+ }
+-doc_items = {NULL, NULL, NULL, NULL, NULL, NULL, NULL};
++doc_items = {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+ 
+ enum
+ {
+@@ -73,8 +85,16 @@ enum
+ enum
+ {
+ 	OPENFILES_ACTION_REMOVE = 0,
++	OPENFILES_ACTION_REMOVE_RECURSIVE,
++	OPENFILES_ACTION_NEW,
++	OPENFILES_ACTION_OPEN,
+ 	OPENFILES_ACTION_SAVE,
+-	OPENFILES_ACTION_RELOAD
++	OPENFILES_ACTION_SAVE_AS,
++	OPENFILES_ACTION_RELOAD,
++	OPENFILES_ACTION_RELOAD_NO_PROMPT,
++	OPENFILES_ACTION_RENAME,
++	OPENFILES_ACTION_CLONE,
++	OPENFILES_ACTION_DELETE
+ };
+ 
+ /* documents tree model columns */
+@@ -103,6 +123,8 @@ static void on_list_symbol_activate(GtkCheckMenuItem *item, gpointer user_data);
+ static void documents_menu_update(GtkTreeSelection *selection);
+ static void sidebar_tabs_show_hide(GtkNotebook *notebook, GtkWidget *child,
+ 								   guint page_num, gpointer data);
++static void on_openfiles_renamed(GtkCellRenderer *renderer, const gchar *path_string,
++		const gchar *name_new, gpointer user_data);
+ 
+ 
+ /* the prepare_* functions are document-related, but I think they fit better here than in document.c */
+@@ -306,6 +328,8 @@ static void prepare_openfiles(void)
+ 	gtk_tree_view_column_pack_start(column, text_renderer, TRUE);
+ 	gtk_tree_view_column_set_attributes(column, text_renderer, "text", DOCUMENTS_SHORTNAME,
+ 		"foreground-gdk", DOCUMENTS_COLOR, NULL);
++	g_signal_connect(G_OBJECT(text_renderer), "edited", G_CALLBACK(on_openfiles_renamed), GTK_TREE_VIEW(tv.tree_openfiles));
++
+ 	gtk_tree_view_append_column(GTK_TREE_VIEW(tv.tree_openfiles), column);
+ 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(tv.tree_openfiles), FALSE);
+ 
+@@ -334,28 +358,6 @@ static void prepare_openfiles(void)
+ }
+ 
+ 
+-/* iter should be toplevel */
+-static gboolean find_tree_iter_dir(GtkTreeIter *iter, const gchar *dir)
+-{
+-	GeanyDocument *doc;
+-	gchar *name;
+-	gboolean result;
+-
+-	if (utils_str_equal(dir, "."))
+-		dir = GEANY_STRING_UNTITLED;
+-
+-	gtk_tree_model_get(GTK_TREE_MODEL(store_openfiles), iter, DOCUMENTS_DOCUMENT, &doc, -1);
+-	g_return_val_if_fail(!doc, FALSE);
+-
+-	gtk_tree_model_get(GTK_TREE_MODEL(store_openfiles), iter, DOCUMENTS_SHORTNAME, &name, -1);
+-
+-	result = utils_filenamecmp(name, dir) == 0;
+-	g_free(name);
+-
+-	return result;
+-}
+-
+-
+ static gboolean utils_filename_has_prefix(const gchar *str, const gchar *prefix)
+ {
+ 	gchar *head = g_strndup(str, strlen(prefix));
+@@ -366,16 +368,26 @@ static gboolean utils_filename_has_prefix(const gchar *str, const gchar *prefix)
+ }
+ 
+ 
+-static gchar *get_doc_folder(const gchar *path)
++gchar *sidebar_get_doc_folder(GeanyDocument *doc, gchar **out_path)
+ {
+-	gchar *tmp_dirname = g_strdup(path);
+-	gchar *project_base_path;
+-	gchar *dirname = NULL;
+-	const gchar *home_dir = g_get_home_dir();
+-	const gchar *rest;
++	if (out_path)
++		*out_path = NULL;
++
++	g_return_val_if_fail(doc != NULL, NULL);
++
++	gchar *folder = NULL;
++	gchar *path = g_path_get_dirname(DOC_FILENAME(doc));
++
++	g_return_val_if_fail(path != NULL, NULL);
++
++	if (!doc->file_name || strcmp(path, ".") == 0)
++	{
++		folder = g_strdup(GEANY_STRING_UNTITLED);
++		goto exit;
++	}
+ 
+ 	/* replace the project base path with the project name */
+-	project_base_path = project_get_base_path();
++	gchar *project_base_path = project_get_base_path();
+ 
+ 	if (project_base_path != NULL)
+ 	{
+@@ -386,75 +398,88 @@ static gchar *get_doc_folder(const gchar *path)
+ 			project_base_path[--len] = '\0';
+ 
+ 		/* check whether the dir name matches or uses the project base path */
+-		if (utils_filename_has_prefix(tmp_dirname, project_base_path))
++		if (utils_filename_has_prefix(path, project_base_path))
+ 		{
+-			rest = tmp_dirname + len;
++			const gchar *rest = path + len;
++
+ 			if (*rest == G_DIR_SEPARATOR || *rest == '\0')
+-			{
+-				dirname = g_strdup_printf("%s%s", app->project->name, rest);
+-			}
++				folder = g_strdup_printf("%s%s", app->project->name, rest);
+ 		}
++
+ 		g_free(project_base_path);
+ 	}
+-	if (dirname == NULL)
++
++	if (folder == NULL)
+ 	{
+-		dirname = tmp_dirname;
++		const gchar *home_dir = g_get_home_dir();
+ 
+ 		/* If matches home dir, replace with tilde */
+-		if (!EMPTY(home_dir) && utils_filename_has_prefix(dirname, home_dir))
++		if (!EMPTY(home_dir) && utils_filename_has_prefix(path, home_dir))
+ 		{
+-			rest = dirname + strlen(home_dir);
++			const gchar *rest = path + strlen(home_dir);
++
+ 			if (*rest == G_DIR_SEPARATOR || *rest == '\0')
+ 			{
+-				dirname = g_strdup_printf("~%s", rest);
+-				g_free(tmp_dirname);
++				folder = g_strdup_printf("~%s", rest);
++				goto exit;
+ 			}
+ 		}
++
++		folder = g_strdup(path);
+ 	}
++
++exit:
++	if (out_path)
++		*out_path = path;
+ 	else
+-		g_free(tmp_dirname);
++		g_free(path);
+ 
+-	return dirname;
++	return folder;
+ }
+ 
+ 
+ static GtkTreeIter *get_doc_parent(GeanyDocument *doc)
+ {
+-	gchar *path;
+-	gchar *dirname = NULL;
+-	static GtkTreeIter parent;
+-	GtkTreeModel *model = GTK_TREE_MODEL(store_openfiles);
+-	static GIcon *dir_icon = NULL;
+-
+ 	if (!documents_show_paths)
+ 		return NULL;
+ 
+-	path = g_path_get_dirname(DOC_FILENAME(doc));
+-	dirname = get_doc_folder(path);
++	static GtkTreeIter parent;
++	GtkTreeModel *model = GTK_TREE_MODEL(store_openfiles);
++	gboolean parent_found = FALSE;
++	gchar *path, *folder, *stored_path, *stored_folder;
++
++	folder = sidebar_get_doc_folder(doc, &path);
+ 
+ 	if (gtk_tree_model_get_iter_first(model, &parent))
+ 	{
+ 		do
+ 		{
+-			if (find_tree_iter_dir(&parent, dirname))
+-			{
+-				g_free(dirname);
+-				g_free(path);
+-				return &parent;
+-			}
++			gtk_tree_model_get(model, &parent, DOCUMENTS_FILENAME, &stored_path,
++					DOCUMENTS_SHORTNAME, &stored_folder, -1);
++			parent_found = utils_filenamecmp(stored_path, path) == 0 &&
++					utils_filenamecmp(stored_folder, folder) == 0;
++			g_free(stored_folder);
++			g_free(stored_path);
++
++			if (parent_found)
++				break;
+ 		}
+ 		while (gtk_tree_model_iter_next(model, &parent));
+ 	}
+-	/* no match, add dir parent */
+-	if (!dir_icon)
+-		dir_icon = ui_get_mime_icon("inode/directory");
+ 
+-	gtk_tree_store_append(store_openfiles, &parent, NULL);
+-	gtk_tree_store_set(store_openfiles, &parent, DOCUMENTS_ICON, dir_icon,
+-		DOCUMENTS_FILENAME, path,
+-		DOCUMENTS_SHORTNAME, doc->file_name ? dirname : GEANY_STRING_UNTITLED, -1);
++	if (!parent_found)
++	{
++		static GIcon *dir_icon = NULL;
++
++		if (!dir_icon)
++			dir_icon = ui_get_mime_icon("inode/directory");
+ 
+-	g_free(dirname);
++		gtk_tree_store_append(store_openfiles, &parent, NULL);
++		gtk_tree_store_set(store_openfiles, &parent, DOCUMENTS_ICON, dir_icon,
++				DOCUMENTS_FILENAME, path, DOCUMENTS_SHORTNAME, folder, -1);
++	}
++
++	g_free(folder);
+ 	g_free(path);
+ 	return &parent;
+ }
+@@ -704,6 +729,37 @@ static void create_openfiles_popup_menu(void)
+ 			G_CALLBACK(on_openfiles_document_action), GINT_TO_POINTER(OPENFILES_ACTION_REMOVE));
+ 	doc_items.close = item;
+ 
++	item = gtk_image_menu_item_new_with_mnemonic(_("Close Recursi_vely"));
++	gtk_image_menu_item_set_image(GTK_IMAGE_MENU_ITEM(item),
++			gtk_image_new_from_stock(GTK_STOCK_CLOSE, GTK_ICON_SIZE_MENU));
++	gtk_widget_show(item);
++	gtk_container_add(GTK_CONTAINER(openfiles_popup_menu), item);
++	g_signal_connect(item, "activate",
++				G_CALLBACK(on_openfiles_document_action), GINT_TO_POINTER(OPENFILES_ACTION_REMOVE_RECURSIVE));
++	doc_items.close_recursively = item;
++
++	item = gtk_separator_menu_item_new();
++	gtk_widget_show(item);
++	gtk_container_add(GTK_CONTAINER(openfiles_popup_menu), item);
++
++	item = gtk_image_menu_item_new_from_stock(GTK_STOCK_NEW, NULL);
++	gtk_widget_show(item);
++	gtk_container_add(GTK_CONTAINER(openfiles_popup_menu), item);
++	g_signal_connect(item, "activate",
++			G_CALLBACK(on_openfiles_document_action), GINT_TO_POINTER(OPENFILES_ACTION_NEW));
++	doc_items.new = item;
++
++	item = gtk_separator_menu_item_new();
++	gtk_widget_show(item);
++	gtk_container_add(GTK_CONTAINER(openfiles_popup_menu), item);
++
++	item = gtk_image_menu_item_new_from_stock(GTK_STOCK_OPEN, NULL);
++	gtk_widget_show(item);
++	gtk_container_add(GTK_CONTAINER(openfiles_popup_menu), item);
++	g_signal_connect(item, "activate",
++			G_CALLBACK(on_openfiles_document_action), GINT_TO_POINTER(OPENFILES_ACTION_OPEN));
++	doc_items.open = item;
++
+ 	item = gtk_separator_menu_item_new();
+ 	gtk_widget_show(item);
+ 	gtk_container_add(GTK_CONTAINER(openfiles_popup_menu), item);
+@@ -715,6 +771,13 @@ static void create_openfiles_popup_menu(void)
+ 			G_CALLBACK(on_openfiles_document_action), GINT_TO_POINTER(OPENFILES_ACTION_SAVE));
+ 	doc_items.save = item;
+ 
++	item = gtk_image_menu_item_new_from_stock(GTK_STOCK_SAVE_AS, NULL);
++	gtk_widget_show(item);
++	gtk_container_add(GTK_CONTAINER(openfiles_popup_menu), item);
++	g_signal_connect(item, "activate",
++			G_CALLBACK(on_openfiles_document_action), GINT_TO_POINTER(OPENFILES_ACTION_SAVE_AS));
++	doc_items.save_as = item;
++
+ 	item = gtk_image_menu_item_new_with_mnemonic(_("_Reload"));
+ 	gtk_image_menu_item_set_image(GTK_IMAGE_MENU_ITEM(item),
+ 		gtk_image_new_from_stock(GTK_STOCK_REVERT_TO_SAVED, GTK_ICON_SIZE_MENU));
+@@ -724,6 +787,31 @@ static void create_openfiles_popup_menu(void)
+ 			G_CALLBACK(on_openfiles_document_action), GINT_TO_POINTER(OPENFILES_ACTION_RELOAD));
+ 	doc_items.reload = item;
+ 
++	item = gtk_image_menu_item_new_with_mnemonic(_("R_ename"));
++	gtk_image_menu_item_set_image(GTK_IMAGE_MENU_ITEM(item),
++			gtk_image_new_from_stock(GTK_STOCK_EDIT, GTK_ICON_SIZE_MENU));
++	gtk_widget_show(item);
++	gtk_container_add(GTK_CONTAINER(openfiles_popup_menu), item);
++	g_signal_connect(item, "activate",
++			G_CALLBACK(on_openfiles_document_action), GINT_TO_POINTER(OPENFILES_ACTION_RENAME));
++	doc_items.rename = item;
++
++	item = gtk_image_menu_item_new_with_mnemonic(_("_Clone"));
++	gtk_image_menu_item_set_image(GTK_IMAGE_MENU_ITEM(item),
++			gtk_image_new_from_stock(GTK_STOCK_COPY, GTK_ICON_SIZE_MENU));
++	gtk_widget_show(item);
++	gtk_container_add(GTK_CONTAINER(openfiles_popup_menu), item);
++	g_signal_connect(item, "activate",
++			G_CALLBACK(on_openfiles_document_action), GINT_TO_POINTER(OPENFILES_ACTION_CLONE));
++	doc_items.clone = item;
++
++	item = gtk_image_menu_item_new_from_stock(GTK_STOCK_DELETE, NULL);
++	gtk_widget_show(item);
++	gtk_container_add(GTK_CONTAINER(openfiles_popup_menu), item);
++	g_signal_connect(item, "activate",
++			G_CALLBACK(on_openfiles_document_action), GINT_TO_POINTER(OPENFILES_ACTION_DELETE));
++	doc_items.delete = item;
++
+ 	item = gtk_separator_menu_item_new();
+ 	gtk_widget_show(item);
+ 	gtk_container_add(GTK_CONTAINER(openfiles_popup_menu), item);
+@@ -749,7 +837,7 @@ static void create_openfiles_popup_menu(void)
+ 	gtk_widget_show(item);
+ 	gtk_container_add(GTK_CONTAINER(openfiles_popup_menu), item);
+ 
+-	doc_items.expand_all = ui_image_menu_item_new(GTK_STOCK_ADD, _("_Expand All"));
++	doc_items.expand_all = ui_image_menu_item_new(GTK_STOCK_ADD, _("E_xpand All"));
+ 	gtk_widget_show(doc_items.expand_all);
+ 	gtk_container_add(GTK_CONTAINER(openfiles_popup_menu), doc_items.expand_all);
+ 	g_signal_connect(doc_items.expand_all, "activate",
+@@ -806,6 +894,29 @@ void sidebar_select_openfiles_item(GeanyDocument *doc)
+ }
+ 
+ 
++static void rename_file_inplace(GeanyDocument *doc)
++{
++	g_assert(DOC_VALID(doc) && doc->file_name);
++
++	GtkTreeIter *iter = &doc->priv->iter;
++
++	g_return_if_fail(gtk_tree_store_iter_is_valid(store_openfiles, iter));
++
++	GtkTreePath *path = gtk_tree_model_get_path(GTK_TREE_MODEL(store_openfiles), iter);
++	GtkTreeView *tree_view = GTK_TREE_VIEW(tv.tree_openfiles);
++	GtkTreeViewColumn *column = gtk_tree_view_get_column(tree_view, 0);
++	GList *renderers = gtk_cell_layout_get_cells(GTK_CELL_LAYOUT(column));
++	GtkCellRenderer *renderer = g_list_nth_data(renderers, 1);
++
++	g_object_set(G_OBJECT(renderer), "editable", TRUE, NULL);
++
++	gtk_tree_view_set_cursor_on_cell(tree_view, path, column, renderer, TRUE);
++
++	gtk_tree_path_free(path);
++	g_list_free(renderers);
++}
++
++
+ /* callbacks */
+ 
+ static void document_action(GeanyDocument *doc, gint action)
+@@ -825,11 +936,54 @@ static void document_action(GeanyDocument *doc, gint action)
+ 			document_save_file(doc, FALSE);
+ 			break;
+ 		}
++		case OPENFILES_ACTION_SAVE_AS:
++		{
++			document_show_tab(doc);
++			dialogs_show_save_as();
++			break;
++		}
+ 		case OPENFILES_ACTION_RELOAD:
+ 		{
+ 			document_reload_prompt(doc, NULL);
+ 			break;
+ 		}
++		case OPENFILES_ACTION_RELOAD_NO_PROMPT:
++		{
++			if (doc->real_path)
++				document_reload_force(doc, NULL);
++
++			break;
++		}
++		case OPENFILES_ACTION_RENAME:
++		{
++			rename_file_inplace(doc);
++			break;
++		}
++		case OPENFILES_ACTION_CLONE:
++		{
++			document_clone(doc);
++			break;
++		}
++		case OPENFILES_ACTION_DELETE:
++		{
++			document_delete_prompt(doc);
++			break;
++		}
++	}
++}
++
++
++static void document_action_recursive(GtkTreeModel *model, GtkTreeIter *parent, gint action)
++{
++	GtkTreeIter child;
++	gint i = gtk_tree_model_iter_n_children(model, parent) - 1;
++	GeanyDocument *doc;
++
++	while (i >= 0 && gtk_tree_model_iter_nth_child(model, &child, parent, i))
++	{
++		gtk_tree_model_get(model, &child, DOCUMENTS_DOCUMENT, &doc, -1);
++		document_action(doc, action);
++		--i;
+ 	}
+ }
+ 
+@@ -845,6 +999,61 @@ static void on_openfiles_document_action(GtkMenuItem *menuitem, gpointer user_da
+ 	if (gtk_tree_selection_get_selected(selection, &model, &iter))
+ 	{
+ 		gtk_tree_model_get(model, &iter, DOCUMENTS_DOCUMENT, &doc, -1);
++
++		if (action == OPENFILES_ACTION_NEW)
++		{
++			gchar *dir = NULL;
++
++			if (doc)
++			{
++				if (doc->file_name)
++					dir = g_path_get_dirname(doc->file_name);
++			}
++			else
++				gtk_tree_model_get(model, &iter, DOCUMENTS_FILENAME, &dir, -1);
++
++			if (!dir || !g_path_is_absolute(dir))
++				if (app->project && !EMPTY(app->project->base_path))
++					dir = g_strdup(app->project->base_path);
++
++			if (dir && g_path_is_absolute(dir))
++				document_new_file_in_dir(dir, NULL, NULL, NULL, TRUE);
++			else
++				document_new_file(NULL, NULL, NULL);
++
++			g_free(dir);
++			return;
++		}
++
++		if (action == OPENFILES_ACTION_OPEN)
++		{
++			gchar *dir = NULL;
++
++			if (doc)
++			{
++				if (doc->file_name)
++					dir = g_path_get_dirname(doc->file_name);
++			}
++			else
++				gtk_tree_model_get(model, &iter, DOCUMENTS_FILENAME, &dir, -1);
++
++			if (!dir || !g_path_is_absolute(dir))
++			{
++				const gchar *tmp = utils_get_default_dir_utf8();
++
++				if (tmp)
++					dir = g_strdup(tmp);
++			}
++
++			if (dir && g_path_is_absolute(dir))
++				dialogs_show_open_file(FALSE, dir);
++			else
++				dialogs_show_open_file(FALSE, NULL);
++
++			g_free(dir);
++			return;
++		}
++
+ 		if (doc)
+ 		{
+ 			document_action(doc, action);
+@@ -852,15 +1061,57 @@ static void on_openfiles_document_action(GtkMenuItem *menuitem, gpointer user_da
+ 		else
+ 		{
+ 			/* parent item selected */
+-			GtkTreeIter child;
+-			gint i = gtk_tree_model_iter_n_children(model, &iter) - 1;
+ 
+-			while (i >= 0 && gtk_tree_model_iter_nth_child(model, &child, &iter, i))
++			switch (action)
+ 			{
+-				gtk_tree_model_get(model, &child, DOCUMENTS_DOCUMENT, &doc, -1);
+-
+-				document_action(doc, action);
+-				i--;
++				case OPENFILES_ACTION_REMOVE_RECURSIVE:
++				{
++					gchar *short_name_a, *short_name_b;
++
++					gtk_tree_model_get(model, &iter, DOCUMENTS_SHORTNAME, &short_name_a, -1);
++					g_return_if_fail(short_name_a);
++
++					gint len = strlen(short_name_a);
++					gint i = gtk_tree_model_iter_n_children(model, NULL) - 1;
++
++					while (i >= 0 && gtk_tree_model_iter_nth_child(model, &iter, NULL, i))
++					{
++						gtk_tree_model_get(model, &iter, DOCUMENTS_SHORTNAME, &short_name_b, -1);
++
++						if (short_name_b && g_ascii_strncasecmp(short_name_a, short_name_b, len) == 0 &&
++								(short_name_b[len] == '\0' || short_name_b[len] == G_DIR_SEPARATOR))
++						{
++							document_action_recursive(model, &iter, OPENFILES_ACTION_REMOVE);
++							g_free(short_name_b);
++						}
++
++						--i;
++					}
++
++					g_free(short_name_a);
++					break;
++				}
++				case OPENFILES_ACTION_RELOAD:
++				{
++					gchar *short_name;
++					gtk_tree_model_get(model, &iter, DOCUMENTS_SHORTNAME, &short_name, -1);
++
++					if (short_name)
++					{
++						if (dialogs_show_question_full(NULL, _("_Reload"), GTK_STOCK_CANCEL,
++								_("Any unsaved changes and undo history will be lost."),
++								_("Reload all documents under '%s'?"), short_name))
++						{
++							document_action_recursive(model, &iter, OPENFILES_ACTION_RELOAD_NO_PROMPT);
++						}
++
++						g_free(short_name);
++					}
++
++					break;
++				}
++				default:
++					document_action_recursive(model, &iter, action);
+ 			}
+ 		}
+ 	}
+@@ -1050,14 +1301,18 @@ static void documents_menu_update(GtkTreeSelection *selection)
+ 		gtk_tree_model_get(model, &iter, DOCUMENTS_DOCUMENT, &doc,
+ 			DOCUMENTS_SHORTNAME, &shortname, -1);
+ 	}
+-	path = !EMPTY(shortname) &&
+-		(g_path_is_absolute(shortname) ||
+-		(app->project && g_str_has_prefix(shortname, app->project->name)));
+ 
+ 	/* can close all, save all (except shortname), but only reload individually ATM */
+ 	gtk_widget_set_sensitive(doc_items.close, sel);
+-	gtk_widget_set_sensitive(doc_items.save, (doc && doc->real_path) || path);
+-	gtk_widget_set_sensitive(doc_items.reload, doc && doc->real_path);
++	gtk_widget_set_sensitive(doc_items.close_recursively, sel && !doc);
++	gtk_widget_set_sensitive(doc_items.new, sel);
++	gtk_widget_set_sensitive(doc_items.open, sel);
++	gtk_widget_set_sensitive(doc_items.save, doc ? doc->changed && doc->file_name && g_path_is_absolute(doc->file_name) : sel);
++	gtk_widget_set_sensitive(doc_items.save_as, doc != NULL);
++	gtk_widget_set_sensitive(doc_items.reload, sel && (!doc || doc->real_path));
++	gtk_widget_set_sensitive(doc_items.rename, doc && doc->file_name);
++	gtk_widget_set_sensitive(doc_items.clone, doc != NULL);
++	gtk_widget_set_sensitive(doc_items.delete, doc && doc->real_path);
+ 	gtk_widget_set_sensitive(doc_items.find_in_files, sel);
+ 	g_free(shortname);
+ 
+@@ -1176,3 +1431,65 @@ static void sidebar_tabs_show_hide(GtkNotebook *notebook, GtkWidget *child,
+ 
+ 	gtk_notebook_set_show_tabs(notebook, (tabs > 1));
+ }
++
++
++static void on_openfiles_renamed(GtkCellRenderer *renderer, const gchar *path_string,
++		const gchar *new_basename, gpointer user_data)
++{
++	GeanyDocument *doc = NULL;
++	GtkTreeIter iter;
++
++	g_object_set(G_OBJECT(renderer), "editable", FALSE, NULL);
++
++	g_return_if_fail(new_basename != NULL);
++
++	if (*new_basename == '\0')
++		return;
++
++	if (gtk_tree_model_get_iter_from_string(GTK_TREE_MODEL(store_openfiles), &iter, path_string))
++	{
++		gtk_tree_model_get(GTK_TREE_MODEL(store_openfiles), &iter, DOCUMENTS_DOCUMENT, &doc, -1);
++
++		if (doc && doc->file_name)
++		{
++			gchar *dirname = g_path_get_dirname(doc->file_name);
++			gchar *new_file_name = g_strconcat(dirname, G_DIR_SEPARATOR_S, new_basename, NULL);
++
++			if (strcmp(doc->file_name, new_file_name) != 0)
++				document_rename_and_save(doc, new_file_name, TRUE);
++
++			g_free(new_file_name);
++			g_free(dirname);
++		}
++	}
++}
++
++
++void sidebar_rename_file_cb(G_GNUC_UNUSED guint key_id)
++{
++	GtkTreeSelection *selection;
++	GtkTreeModel *model;
++	GtkTreeIter iter;
++	GeanyDocument *doc;
++
++	if (ui_prefs.sidebar_visible && interface_prefs.sidebar_openfiles_visible)
++	{
++		selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(tv.tree_openfiles));
++
++		if (selection && gtk_tree_selection_get_selected(selection, &model, &iter))
++		{
++			gtk_tree_model_get(model, &iter, DOCUMENTS_DOCUMENT, &doc, -1);
++
++			if (!DOC_VALID(doc))
++				doc = document_get_current();
++
++			if (doc && doc->file_name)
++			{
++				gtk_notebook_set_current_page(GTK_NOTEBOOK(main_widgets.sidebar_notebook),
++						TREEVIEW_OPENFILES);
++
++				rename_file_inplace(doc);
++			}
++		}
++	}
++}
+diff --git a/src/sidebar.h b/src/sidebar.h
+index 113046b..6e3eab9 100644
+--- a/src/sidebar.h
++++ b/src/sidebar.h
+@@ -55,6 +55,8 @@ void sidebar_finalize(void);
+ 
+ void sidebar_update_tag_list(GeanyDocument *doc, gboolean update);
+ 
++gchar *sidebar_get_doc_folder(GeanyDocument *doc, gchar **out_path);
++
+ void sidebar_openfiles_add(GeanyDocument *doc);
+ 
+ void sidebar_openfiles_update(GeanyDocument *doc);
+@@ -71,6 +73,8 @@ void sidebar_focus_openfiles_tab(void);
+ 
+ void sidebar_focus_symbols_tab(void);
+ 
++void sidebar_rename_file_cb(guint key_id);
++
+ G_END_DECLS
+ 
+ #endif /* GEANY_SIDEBAR_H */
+diff --git a/src/socket.c b/src/socket.c
+index 5e4aa4b..a8a198e 100644
+--- a/src/socket.c
++++ b/src/socket.c
+@@ -129,25 +129,28 @@ static void send_open_command(gint sock, gint argc, gchar **argv)
+ {
+ 	gint i;
+ 
+-	g_return_if_fail(argc > 1);
++	g_return_if_fail(argc > 1 || cl_options.new_instance_mode == NEW_INSTANCE_EXPLICITLY_DISABLED);
+ 	geany_debug("using running instance of Geany");
+ 
+-	if (cl_options.goto_line >= 0)
++	if (argc > 1)
+ 	{
+-		gchar *line = g_strdup_printf("%d\n", cl_options.goto_line);
+-		socket_fd_write_all(sock, "line\n", 5);
+-		socket_fd_write_all(sock, line, strlen(line));
+-		socket_fd_write_all(sock, ".\n", 2);
+-		g_free(line);
+-	}
++		if (cl_options.goto_line >= 0)
++		{
++			gchar *line = g_strdup_printf("%d\n", cl_options.goto_line);
++			socket_fd_write_all(sock, "line\n", 5);
++			socket_fd_write_all(sock, line, strlen(line));
++			socket_fd_write_all(sock, ".\n", 2);
++			g_free(line);
++		}
+ 
+-	if (cl_options.goto_column >= 0)
+-	{
+-		gchar *col = g_strdup_printf("%d\n", cl_options.goto_column);
+-		socket_fd_write_all(sock, "column\n", 7);
+-		socket_fd_write_all(sock, col, strlen(col));
+-		socket_fd_write_all(sock, ".\n", 2);
+-		g_free(col);
++		if (cl_options.goto_column >= 0)
++		{
++			gchar *col = g_strdup_printf("%d\n", cl_options.goto_column);
++			socket_fd_write_all(sock, "column\n", 7);
++			socket_fd_write_all(sock, col, strlen(col));
++			socket_fd_write_all(sock, ".\n", 2);
++			g_free(col);
++		}
+ 	}
+ 
+ 	if (cl_options.readonly) /* append "ro" to denote readonly status for new docs */
+@@ -325,7 +328,7 @@ gint socket_init(gint argc, gchar **argv)
+ 		SetForegroundWindow(hwnd);
+ #endif
+ 	/* now we send the command line args */
+-	if (argc > 1)
++	if (argc > 1 || cl_options.new_instance_mode == NEW_INSTANCE_EXPLICITLY_DISABLED)
+ 	{
+ 		send_open_command(sock, argc, argv);
+ 	}
+diff --git a/src/templates.c b/src/templates.c
+index 5fdbf31..73f4934 100644
+--- a/src/templates.c
++++ b/src/templates.c
+@@ -224,7 +224,7 @@ on_new_with_file_template(GtkMenuItem *menuitem, G_GNUC_UNUSED gpointer user_dat
+ 	if (template)
+ 	{
+ 		/* line endings will be converted */
+-		document_new_file(new_filename, ft, template);
++		document_new_file_in_default_dir(new_filename, ft, template, TRUE);
+ 	}
+ 	else
+ 	{
+diff --git a/src/ui_utils.c b/src/ui_utils.c
+index 702a345..d31d868 100644
+--- a/src/ui_utils.c
++++ b/src/ui_utils.c
+@@ -403,7 +403,7 @@ void ui_set_window_title(GeanyDocument *doc)
+ 		g_string_append(str, "] - ");
+ 	}
+ 	g_string_append(str, "Geany");
+-	if (cl_options.new_instance)
++	if (cl_options.new_instance_mode == NEW_INSTANCE_ENABLED)
+ 	{
+ 		g_string_append(str, _(" (new instance)"));
+ 	}
+@@ -876,6 +876,7 @@ static void init_document_widgets(void)
+ 	add_doc_widget("menu_undo2");
+ 	add_doc_widget("properties1");
+ 	add_doc_widget("menu_reload1");
++	add_doc_widget("menu_reload_all1");
+ 	add_doc_widget("menu_document1");
+ 	add_doc_widget("menu_choose_color1");
+ 	add_doc_widget("menu_color_schemes");
+@@ -2524,6 +2525,8 @@ void ui_init(void)
+ 
+ 	ui_widgets.statusbar = ui_lookup_widget(main_widgets.window, "statusbar");
+ 	ui_widgets.print_page_setup = ui_lookup_widget(main_widgets.window, "page_setup1");
++	ui_widgets.rename_menuitem = ui_lookup_widget(main_widgets.window, "menu_rename1");
++	ui_widgets.delete_file_menuitem = ui_lookup_widget(main_widgets.window, "menu_file_delete1");
+ 
+ 	main_widgets.progressbar = progress_bar_create();
+ 
+diff --git a/src/ui_utils.h b/src/ui_utils.h
+index b260d0b..21a5595 100644
+--- a/src/ui_utils.h
++++ b/src/ui_utils.h
+@@ -70,6 +70,7 @@ typedef struct GeanyInterfacePrefs
+ 	gboolean		compiler_tab_autoscroll;
+ 	gint			msgwin_orientation;			/**< orientation of the message window */
+ 	gint 			symbols_sort_mode;			/**< symbol list sorting mode */
++	gint			notebook_auto_sort_tabs;	/* automatic sorting mode of notebook tabs */
+ }
+ GeanyInterfacePrefs;
+ 
+@@ -190,6 +191,8 @@ typedef struct UIWidgets
+ 	GtkWidget	*recent_projects_menuitem;
+ 	GtkWidget	*recent_projects_menu_menubar;
+ 	GtkWidget	*config_files_filetype_menu;
++	GtkWidget	*rename_menuitem;
++	GtkWidget	*delete_file_menuitem;
+ 
+ 	/* dialogs */
+ 	GtkWidget	*open_colorsel;
+diff --git a/src/vte.c b/src/vte.c
+index 20492ea..daebb9b 100644
+--- a/src/vte.c
++++ b/src/vte.c
+@@ -132,6 +132,7 @@ struct VteFunctions
+ 	void (*vte_terminal_set_cursor_blinks) (VteTerminal *terminal, gboolean blink);
+ 	void (*vte_terminal_select_all) (VteTerminal *terminal);
+ 	void (*vte_terminal_set_audible_bell) (VteTerminal *terminal, gboolean is_audible);
++	void (*vte_terminal_set_allow_bold) (VteTerminal *terminal, gboolean allow_bold);
+ 	GtkAdjustment* (*vte_terminal_get_adjustment) (VteTerminal *terminal);
+ #if GTK_CHECK_VERSION(3, 0, 0)
+ 	/* hack for the VTE 2.91 API using GdkRGBA: we wrap the API to keep using GdkColor on our side */
+@@ -630,6 +631,7 @@ static gboolean vte_register_symbols(GModule *mod)
+ 		BIND_REQUIRED_SYMBOL(vte_terminal_set_cursor_blinks);
+ 	BIND_REQUIRED_SYMBOL(vte_terminal_select_all);
+ 	BIND_REQUIRED_SYMBOL(vte_terminal_set_audible_bell);
++	BIND_REQUIRED_SYMBOL(vte_terminal_set_allow_bold);
+ 	if (! BIND_SYMBOL(vte_terminal_get_adjustment))
+ 		/* vte_terminal_get_adjustment() is available since 0.9 and removed in 0.38 */
+ 		vf->vte_terminal_get_adjustment = default_vte_terminal_get_adjustment;
+@@ -662,6 +664,7 @@ void vte_apply_user_settings(void)
+ 	vf->vte_terminal_set_color_background(VTE_TERMINAL(vc->vte), &vc->colour_back);
+ 	vf->vte_terminal_set_audible_bell(VTE_TERMINAL(vc->vte), prefs.beep_on_errors);
+ 	vte_set_cursor_blink_mode();
++	vf->vte_terminal_set_allow_bold(VTE_TERMINAL(vc->vte), vc->allow_bold);
+ 
+ 	override_menu_key();
+ }
+diff --git a/src/vte.h b/src/vte.h
+index b1af879..e473c2f 100644
+--- a/src/vte.h
++++ b/src/vte.h
+@@ -55,6 +55,7 @@ typedef struct
+ 	gboolean enable_bash_keys;
+ 	gboolean cursor_blinks;
+ 	gboolean send_selection_unsafe;
++	gboolean allow_bold;
+ 	gint scrollback_lines;
+ 	gchar *shell;
+ 	gchar *font;

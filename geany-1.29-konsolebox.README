@@ -1,0 +1,75 @@
+The patch adds the following features to Geany 1.29:
+
+* Manual and automatic sorting of editor tabs by pathname, filename or folder
+
+* New commands in the `File` menu:
+
+  - `Open Files Recursively`, which allows multiple files to be opened or viewed
+    recursively.  This currently does not yet support aborting once the
+    recursive operation has started.
+
+  - `Reload All`, which allows reloading all documents at once
+
+  - `Rename`, which renames documents with an input dialog box
+
+  - `Delete`, which allows current document's file to be deleted in disk with a
+    confirmation dialog box
+
+* New commands in the document's context menu in the sidebar:
+
+  - `Close Recursively`, which allows multiple files under a folder and
+    its subfolders to be closed recursively
+
+  - `New`, which creates new documents relative to the selected object's context
+
+  - `Save As`
+
+  - `Rename`, which renames documents in-place.  The shortcut key of
+    `Expand All` has also been changed from `E` to `x`, so it wouldn't conflict
+    with `Rename`'s.
+
+  - `Clone`, which is an alias to `Document`->`Clone`
+
+  - `Delete`, which works same as `File`->`Delete`, but against the selected
+    document target
+
+  - Also, an enhancement to `Reload` command which makes it capable of reloading
+    multiple documents in the context of a folder
+
+* Cloned documents are now given `.clone[1, ..., 99]` filenames instead of being
+  left untitled
+
+* A new no-new-instance option (`--no-new-instance` or `-I`), which forces Geany
+  to not open a new instance even if no file arguments are passed in the
+  command-line.  This is helpful in creating launchers or shortcut items that
+  open only a single instance of Geany.
+
+* Ability to configure the default directory where new documents are placed.  It
+  can be one of:
+
+  - None / Disabled
+
+  - Based on the directory of the current document
+
+  - The project directory
+
+  - The home directory
+
+  - The directory of the current document, or the project directory if
+    there's no existing document, or the home directory
+
+* An enhancement to the detection of bash functions when creating symbols of a
+  shell-script document.  Since Bash also allow other characters besides
+  `[[:alnum:]_]` when declaring function names using the `function` keyword.
+  Bash also does not require having a pair of parentheses after the name when
+  the function is declared wth the 'function' keyword.  This also invalidates
+  function names that are completely made up of digits.
+
+* Allow bold fonts in VTE to be disabled
+
+* Some tweaks on how `Save` should appear in the document's context menu
+
+* A rework to the functions related to the mechanism of `Save As`
+
+* A rework to `get_doc_parent()` and `get_doc_folder()`, which makes
+  their functionality more consistent and contained
